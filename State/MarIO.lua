@@ -1183,7 +1183,7 @@ event.onexit(onExit)
 -- playTopButton = forms.button(form, "Play Top", playTop, 5, 500)
 -- hideBanner = forms.checkbox(form, "Hide Banner", 5, 600)
 
-form = forms.newform(200, 260, "Fitness")
+form = forms.newform(300, 260, "Fitness")
 maxFitnessLabel = forms.label(form, "Max Fitness: " .. math.floor(pool.maxFitness), 5, 8)
 showNetwork = forms.checkbox(form, "Show Map", 5, 30)
 showMutationRates = forms.checkbox(form, "Show M-Rates", 5, 52)
@@ -1198,7 +1198,7 @@ hideBanner = forms.checkbox(form, "Hide Banner", 5, 190)
 while true do
 	local backgroundColor = 0xD0FFFFFF
 	if not forms.ischecked(hideBanner) then
-		gui.drawBox(0, 0, 300, 26, backgroundColor, backgroundColor)
+		gui.drawBox(0, 7, 300, 40, backgroundColor, backgroundColor)
 	end
 
 	local species = pool.species[pool.currentSpecies]
@@ -1237,6 +1237,8 @@ while true do
 			wonLevel = false
 		end
 	end
+
+	local fitnessToDisplay = 100000 * (1 + marioWorld) + 10000 * marioLevel + rightmost - (pool.currentFrame / 2)
 	
 	local timeoutBonus = pool.currentFrame / 4
 	if timeout + timeoutBonus <= 0 or playerDied then
@@ -1252,13 +1254,16 @@ while true do
 		if gameinfo.getromname() == "Super Mario World (USA)" and rightmost > 4816 then
 			fitness = fitness + 1000
 		end
+
 		if fitness == 0 then
 			fitness = -1
 		end
+
 		genome.fitness = fitness
 		
 		if fitness > pool.maxFitness then
 			pool.maxFitness = fitness
+			console.writeline("New Max Fitness: " .. math.floor(pool.maxFitness))
 			forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
 			writeFile("backup." .. pool.generation .. "." .. forms.gettext(saveLoadFile))
 		end
@@ -1283,9 +1288,9 @@ while true do
 		end
 	end
 	if not forms.ischecked(hideBanner) then
-		gui.drawText(0, 0, "Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " (" .. math.floor(measured/total*100) .. "%)", 0xFF000000, 11)
-		gui.drawText(0, 12, "Fitness: " .. math.floor(rightmost - (pool.currentFrame) / 2 - (timeout + timeoutBonus)*2/3), 0xFF000000, 11)
-		gui.drawText(100, 12, "Max Fitness: " .. math.floor(pool.maxFitness), 0xFF000000, 11)
+		gui.drawText(0, 10, "Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " (" .. math.floor(measured/total*100) .. "%)", 0xFF000000, 11)
+		gui.drawText(0, 22, "Fitness: " .. math.floor(fitnessToDisplay), 0xFF000000, 11)
+		gui.drawText(150, 22, "Max: " .. math.floor(pool.maxFitness), 0xFF000000, 11)
 		--console.writeline(tostring(inputs[#inputs-4]) .. " : " .. tostring(inputs[#inputs-3]) .. " : " .. tostring(inputs[#inputs-2]) .. " : " .. tostring(inputs[#inputs-1]))
 	end
 		
