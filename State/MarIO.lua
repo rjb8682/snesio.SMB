@@ -82,6 +82,10 @@ function getPositions()
 		marioCurY = memory.read_s8(0x03B8)
 		marioVX = memory.read_s8(0x0057)
 		marioVY = memory.read_s8(0x009F)
+
+		marioWorld = memory.read_s8(0x075F)
+		marioLevel = memory.read_s8(0x0760)
+
 		--console.writeline("vx " .. marioVX)
 		--console.writeline("vy " .. marioVY)
 		-- New inputs!!
@@ -1204,7 +1208,7 @@ while true do
 		displayGenome(genome)
 	end
 	
-	if pool.currentFrame%10 == 0 then
+	if pool.currentFrame%4 == 0 then
 		evaluateCurrent()
 	end
 
@@ -1237,15 +1241,16 @@ while true do
 	local timeoutBonus = pool.currentFrame / 4
 	if timeout + timeoutBonus <= 0 or playerDied then
 		playerDied = false
-		local fitness = rightmost - pool.currentFrame / 2
+
+		-- 	levelScore = 100000 * (1 + marioWorld) + 10000 * marioLevel
+	    -- currentPositionScore = rightmost - pool.currentFrame / 2
+		--local fitness = rightmost - pool.currentFrame / 2 -- position in level
+		--fitness = fitness + 100000 * (1 + marioWorld) + 10000 * marioLevel
+		
+		local fitness = 100000 * (1 + marioWorld) + 10000 * marioLevel + rightmost - (pool.currentFrame / 2)
+
 		if gameinfo.getromname() == "Super Mario World (USA)" and rightmost > 4816 then
 			fitness = fitness + 1000
-		end
-		if gameinfo.getromname() == "Super Mario Bros." then
-			-- console.writeline("Player Float: " .. playerFloatState)
-			if rightmost > 3186 then
-				fitness = fitness + 1000
-			end
 		end
 		if fitness == 0 then
 			fitness = -1
