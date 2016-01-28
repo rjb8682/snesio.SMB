@@ -31,7 +31,7 @@ end
 BoxRadius = 6
 InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 
-Inputs = InputSize + 1
+Inputs = InputSize + 3
 Outputs = #ButtonNames
 
 Population = 300
@@ -204,10 +204,10 @@ function getInputs()
 	end
 	--console.writeline("vx " .. marioVX)
 	--console.writeline("vy " .. marioVY)
-	inputs[#inputs] = marioCurX
-	inputs[#inputs] = marioCurY
-	inputs[#inputs] = marioVX
-	inputs[#inputs] = marioVY
+	--inputs[#inputs+1] = marioCurX
+	--inputs[#inputs+1] = marioCurY
+	inputs[#inputs+1] = marioVX
+	inputs[#inputs+1] = marioVY
 
 	-- New inputs!!
 	if gameinfo.getromname() == "Super Mario Bros." then
@@ -1286,7 +1286,7 @@ while true do
 		gui.drawText(0, 0, "Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " (" .. math.floor(measured/total*100) .. "%)", 0xFF000000, 11)
 		gui.drawText(0, 12, "Fitness: " .. math.floor(rightmost - (pool.currentFrame) / 2 - (timeout + timeoutBonus)*2/3), 0xFF000000, 11)
 		gui.drawText(100, 12, "Max Fitness: " .. math.floor(pool.maxFitness), 0xFF000000, 11)
-		console.writeline(tostring(inputs[#inputs-4]) .. " : " .. tostring(inputs[#inputs-3]) .. " : " .. tostring(inputs[#inputs-2]) .. " : " .. tostring(inputs[#inputs-1]))
+		--console.writeline(tostring(inputs[#inputs-4]) .. " : " .. tostring(inputs[#inputs-3]) .. " : " .. tostring(inputs[#inputs-2]) .. " : " .. tostring(inputs[#inputs-1]))
 	end
 		
 	pool.currentFrame = pool.currentFrame + 1
