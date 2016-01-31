@@ -34,6 +34,8 @@ InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 Inputs = InputSize + 3
 Outputs = #ButtonNames
 
+compoundDistanceTraveled = 0
+
 Population = 300
 DeltaDisjoint = 2.0
 DeltaWeights = 0.4
@@ -1163,6 +1165,10 @@ function playTop()
 	return
 end
 
+function resetMaxFitness()
+	pool.maxFitness = 0
+end
+
 function onExit()
 	forms.destroy(form)
 end
@@ -1193,6 +1199,7 @@ loadButton = forms.button(form, "Load", loadPool, 80, 102)
 saveLoadFile = forms.textbox(form, Filename .. ".pool", 170, 25, nil, 5, 148)
 saveLoadLabel = forms.label(form, "Save/Load:", 5, 129)
 playTopButton = forms.button(form, "Play Top", playTop, 5, 170)
+resetMaxFitnessButton = forms.button(form, "Reset Max Fitness", resetMaxFitness, 85, 170)
 hideBanner = forms.checkbox(form, "Hide Banner", 5, 190)
 
 while true do
@@ -1217,28 +1224,32 @@ while true do
 	getPositions()
 	if marioX > rightmost then
 		rightmost = marioX
+		compoundDistanceTraveled = rightmost
 		timeout = TimeoutConstant
 	end
 	
 	timeout = timeout - 1
-
 	playerDied = false
+
 	if playerState == 6 or playerState == 0x0B then
 		playerDied = true
 		console.writeline("Player Died")
 	end
 
+	local fitness = 100000 * (1 + marioWorld) + 10000 * marioLevel + compoundDistanceTraveled - (pool.currentFrame / 2)
+
 	if wonLevel then
 		-- Player sliding down flag pole
 		timeout = TimeoutConstant
+		fitness = fitness
 		-- console.writeline("playerState: " .. playerState)
 		if playerState == 8 then
 			-- fitness = fitness + 1000
+			rightmost = 0
+			-- console.writeline("Mario X: " .. marioX .. " Rightmost: " .. rightmost)
 			wonLevel = false
 		end
 	end
-
-	local fitnessToDisplay = 100000 * (1 + marioWorld) + 10000 * marioLevel + rightmost - (pool.currentFrame / 2)
 	
 	local timeoutBonus = pool.currentFrame / 4
 	if timeout + timeoutBonus <= 0 or playerDied then
@@ -1247,9 +1258,10 @@ while true do
 		-- 	levelScore = 100000 * (1 + marioWorld) + 10000 * marioLevel
 	    -- currentPositionScore = rightmost - pool.currentFrame / 2
 		--local fitness = rightmost - pool.currentFrame / 2 -- position in level
-		--fitness = fitness + 100000 * (1 + marioWorld) + 10000 * marioLevel
-		
-		local fitness = 100000 * (1 + marioWorld) + 10000 * marioLevel + rightmost - (pool.currentFrame / 2)
+		--fitness = fitness + 100000 * (1 + marioWorld) + 10000 * marioLevel		
+		-- local fitness = 100000 * (1 + marioWorld) + 10000 * marioLevel + compoundDistanceTraveled - (pool.currentFrame / 2)
+
+		compoundDistanceTraveled = 0
 
 		if gameinfo.getromname() == "Super Mario World (USA)" and rightmost > 4816 then
 			fitness = fitness + 1000
@@ -1289,7 +1301,7 @@ while true do
 	end
 	if not forms.ischecked(hideBanner) then
 		gui.drawText(0, 10, "Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " (" .. math.floor(measured/total*100) .. "%)", 0xFF000000, 11)
-		gui.drawText(0, 22, "Fitness: " .. math.floor(fitnessToDisplay), 0xFF000000, 11)
+		gui.drawText(0, 22, "Fitness: " .. math.floor(fitness), 0xFF000000, 11)
 		gui.drawText(150, 22, "Max: " .. math.floor(pool.maxFitness), 0xFF000000, 11)
 		--console.writeline(tostring(inputs[#inputs-4]) .. " : " .. tostring(inputs[#inputs-3]) .. " : " .. tostring(inputs[#inputs-2]) .. " : " .. tostring(inputs[#inputs-1]))
 	end
