@@ -34,6 +34,12 @@ InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 Inputs = InputSize + 3
 Outputs = #ButtonNames
 
+levelsToPlay = [
+	"SMB1-1.State",
+	"SMB1-2.State",
+	"SMB1-3.State"
+]
+
 compoundDistanceTraveled = 0
 
 Population = 300
