@@ -4,23 +4,35 @@
 -- For SMW, make sure you have a save state named "DP1.state" at the beginning of a level,
 -- and put a copy in both the Lua folder and the root directory of BizHawk.
 
-Filename = "1.State"
-ButtonNames = {
-	"A",
-	--"B",
-	--"Up",
-	--"Down",
-	"Left",
-	"Right",
-}
+if gameinfo.getromname() == "Super Mario World (USA)" then
+	Filename = "DP1.state"
+	ButtonNames = {
+		"A",
+		"B",
+		"X",
+		"Y",
+		"Up",
+		"Down",
+		"Left",
+		"Right",
+	}
+elseif gameinfo.getromname() == "Super Mario Bros." then
+	Filename = "SMB1-1.State"
+	ButtonNames = {
+		"A",
+		"B",
+		"Up",
+		"Down",
+		"Left",
+		"Right",
+	}
+end
 
 BoxRadius = 6
-InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
+InputSize = (BoxRadius*2+1)*(BoxRadius*2+1)
 
-Inputs = InputSize + 4
+Inputs = InputSize+1
 Outputs = #ButtonNames
-
-compoundDistanceTraveled = 0
 
 Population = 300
 DeltaDisjoint = 2.0
@@ -43,8 +55,6 @@ TimeoutConstant = 20
 
 MaxNodes = 1000000
 
-wonLevel = false
-
 function getPositions()
 	if gameinfo.getromname() == "Super Mario World (USA)" then
 		marioX = memory.read_s16_le(0x94)
@@ -58,27 +68,6 @@ function getPositions()
 	elseif gameinfo.getromname() == "Super Mario Bros." then
 		marioX = memory.readbyte(0x6D) * 0x100 + memory.readbyte(0x86)
 		marioY = memory.readbyte(0x03B8)+16
-
-		playerFloatState = memory.readbyte(0x1D)
-		if playerFloatState == 3 then
-			wonLevel = true
-		end
-		playerState = memory.readbyte(0x000E)
-
-		verticalScreenPosition = memory.readbyte(0x00B5)
-
-		-- New inputs!!
-		marioCurX = memory.read_s8(0x0086)
-		marioCurY = memory.read_s8(0x03B8)
-		marioVX = memory.read_s8(0x0057)
-		marioVY = memory.read_s8(0x009F)
-
-		marioWorld = memory.read_s8(0x075F)
-		marioLevel = memory.read_s8(0x0760)
-
-		--console.writeline("vx " .. marioVX)
-		--console.writeline("vy " .. marioVY)
-		-- New inputs!!
 	
 		screenX = memory.readbyte(0x03AD)
 		screenY = memory.readbyte(0x03B8)
@@ -192,21 +181,6 @@ function getInputs()
 			end
 		end
 	end
-	--console.writeline("vx " .. marioVX)
-	--console.writeline("vy " .. marioVY)
-	--inputs[#inputs+1] = marioCurX
-	inputs[#inputs+1] = marioCurY
-	inputs[#inputs+1] = marioVX
-	inputs[#inputs+1] = marioVY
-
-	-- New inputs!!
-	if gameinfo.getromname() == "Super Mario Bros." then
-		--inputs[#inputs] = marioCurX
-		--inputs[#inputs] = marioCurY
-		--inputs[#inputs] = marioVX
-		--inputs[#inputs] = marioVY
-	end
-	-- New inputs!!
 	
 	--mariovx = memory.read_s8(0x7B)
 	--mariovy = memory.read_s8(0x7D)
@@ -224,7 +198,6 @@ function newInnovation()
 end
 
 function newPool()
-	console.writeline("CALLING NEWPOOL")
 	local pool = {}
 	pool.species = {}
 	pool.generation = 0
@@ -357,11 +330,8 @@ end
 
 function evaluateNetwork(network, inputs)
 	table.insert(inputs, 1)
-
 	if #inputs ~= Inputs then
 		console.writeline("Incorrect number of neural network inputs.")
-		console.writeline(#inputs)
-		console.writeline(Inputs)
 		return {}
 	end
 	
@@ -835,12 +805,10 @@ function newGeneration()
 	
 	pool.generation = pool.generation + 1
 	
-	console.writeline("writing backup file in newGeneration")
 	writeFile("backup." .. pool.generation .. "." .. forms.gettext(saveLoadFile))
 end
 	
 function initializePool()
-	console.writeline("initializePool")
 	pool = newPool()
 
 	for i=1,Population do
@@ -883,21 +851,15 @@ function evaluateCurrent()
 		controller["P1 Left"] = false
 		controller["P1 Right"] = false
 	end
-
-
-	--if controller["P1 Up"] and controller["P1 Down"] then
-	--	controller["P1 Up"] = false
-	--	controller["P1 Down"] = false
-	--end
-
-	controller["P1 B"] = true
+	if controller["P1 Up"] and controller["P1 Down"] then
+		controller["P1 Up"] = false
+		controller["P1 Down"] = false
+	end
 
 	joypad.set(controller)
 end
 
-console.writeline("is pool nil?")
 if pool == nil then
-	console.writeline("yup")
 	initializePool()
 end
 
@@ -1049,7 +1011,7 @@ function displayGenome(genome)
 end
 
 function writeFile(filename)
-    local file = io.open(filename, "w")
+        local file = io.open(filename, "w")
 	file:write(pool.generation .. "\n")
 	file:write(pool.maxFitness .. "\n")
 	file:write(#pool.species .. "\n")
@@ -1085,13 +1047,11 @@ end
 
 function savePool()
 	local filename = forms.gettext(saveLoadFile)
-	console.writeLine("writing file in savePool")
 	writeFile(filename)
 end
 
 function loadFile(filename)
-	console.writeline("CALLING LOADFILE")
-    local file = io.open(filename, "r")
+        local file = io.open(filename, "r")
 	pool = newPool()
 	pool.generation = file:read("*number")
 	pool.maxFitness = file:read("*number")
@@ -1164,15 +1124,10 @@ function playTop()
 	return
 end
 
-function resetMaxFitness()
-	pool.maxFitness = 0
-end
-
 function onExit()
 	forms.destroy(form)
 end
 
-console.writeline("writing temp.pool")
 writeFile("temp.pool")
 
 event.onexit(onExit)
@@ -1189,7 +1144,7 @@ event.onexit(onExit)
 -- playTopButton = forms.button(form, "Play Top", playTop, 5, 500)
 -- hideBanner = forms.checkbox(form, "Hide Banner", 5, 600)
 
-form = forms.newform(300, 260, "Fitness")
+form = forms.newform(200, 260, "Fitness")
 maxFitnessLabel = forms.label(form, "Max Fitness: " .. math.floor(pool.maxFitness), 5, 8)
 showNetwork = forms.checkbox(form, "Show Map", 5, 30)
 showMutationRates = forms.checkbox(form, "Show M-Rates", 5, 52)
@@ -1199,116 +1154,82 @@ loadButton = forms.button(form, "Load", loadPool, 80, 102)
 saveLoadFile = forms.textbox(form, Filename .. ".pool", 170, 25, nil, 5, 148)
 saveLoadLabel = forms.label(form, "Save/Load:", 5, 129)
 playTopButton = forms.button(form, "Play Top", playTop, 5, 170)
-resetMaxFitnessButton = forms.button(form, "Reset Max Fitness", resetMaxFitness, 85, 170)
 hideBanner = forms.checkbox(form, "Hide Banner", 5, 190)
-backgroundColor = 0xD0FFFFFF
-
-function playGame(currentTotalFitness, species, genome, stateName)
-	savestate.load(stateName)
-	timeout = TimeoutConstant
-	rightmost = 0
-
-	-- Play until we die / win
-	while true do
-		if not forms.ischecked(hideBanner) then
-			gui.drawBox(0, 7, 300, 40, backgroundColor, backgroundColor)
-		end
-		
-		if forms.ischecked(showNetwork) then
-			displayGenome(genome)
-		end
-		
-		-- Decide which inputs to set
-		if pool.currentFrame%4 == 0 then
-			evaluateCurrent()
-		end
-		joypad.set(controller)
-
-		-- Check how far we are in the level
-		getPositions()
-		if marioX > rightmost then
-			rightmost = marioX
-			compoundDistanceTraveled = rightmost
-			timeout = TimeoutConstant
-		end
-
-		local distanceFitness = compoundDistanceTraveled 
-		local timeFitnessPenalty = pool.currentFrame / 4
-		local fitness = distanceFitness - timeFitnessPenalty
-
-		-- Check for death
-		if playerState == 6 or playerState == 0x0B or verticalScreenPosition > 1 then
-			console.writeline("Player Died")
-			return distanceFitness - timeFitnessPenalty
-		end
-
-		-- Did we win? (set in getPositions)
-		if wonLevel then
-			wonLevel = false
-			return 10000 - timeFitnessPenalty
-		end
-
-		-- Did we time out?
-		timeout = timeout - 1
-		local timeoutBonus = pool.currentFrame / 4
-		if timeout + timeoutBonus <= 0  then
-			compoundDistanceTraveled = 0
-			return distanceFitness - timeFitnessPenalty
-		end
-
-		-- TODO wtf is this (main loop)
-		local measured = 0
-		local total = 0
-		for _,species in pairs(pool.species) do
-			for _,genome in pairs(species.genomes) do
-				total = total + 1
-				if genome.fitness ~= 0 then
-					measured = measured + 1
-				end
-			end
-		end
-		-- TODO wtf is this
-
-		if not forms.ischecked(hideBanner) then
-			gui.drawText(0, 10, "Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " (" .. math.floor(measured/total*100) .. "%)", 0xFF000000, 11)
-			gui.drawText(0, 22, "Fitness: " .. math.floor(currentTotalFitness + fitness), 0xFF000000, 11)
-			gui.drawText(150, 22, "Max: " .. math.floor(pool.maxFitness), 0xFF000000, 11)
-			--console.writeline(tostring(inputs[#inputs-4]) .. " : " .. tostring(inputs[#inputs-3]) .. " : " .. tostring(inputs[#inputs-2]) .. " : " .. tostring(inputs[#inputs-1]))
-		end
-		
-		-- Advance frame since we didn't win / die
-		pool.currentFrame = pool.currentFrame + 1
-		emu.frameadvance()
-	end
-end
 
 while true do
-
-	initializeRun()
+	local backgroundColor = 0xD0FFFFFF
+	if not forms.ischecked(hideBanner) then
+		gui.drawBox(0, 0, 300, 26, backgroundColor, backgroundColor)
+	end
 
 	local species = pool.species[pool.currentSpecies]
 	local genome = species.genomes[pool.currentGenome]
-
-	local fitness = 0
-
-	fitness = fitness + playGame(fitness, species, genome, "1.State")
-	fitness = fitness + playGame(fitness, species, genome, "2.State")
-	fitness = fitness + playGame(fitness, species, genome, "3.State")
-
-	genome.fitness = fitness
-		
-	if fitness > pool.maxFitness then
-		pool.maxFitness = fitness
-		console.writeline("New Max Fitness: " .. math.floor(pool.maxFitness))
-		forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
-		console.writeline("writing backup file in fitness > pool.maxFitness")
-		writeFile("backup." .. pool.generation .. "." .. forms.gettext(saveLoadFile))
+	
+	if forms.ischecked(showNetwork) then
+		displayGenome(genome)
 	end
 	
-	console.writeline("Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness)
-	pool.currentSpecies = 1
-	pool.currentGenome = 1
-	while fitnessAlreadyMeasured() do
-		nextGenome()
+	if pool.currentFrame%5 == 0 then
+		evaluateCurrent()
 	end
+
+	joypad.set(controller)
+
+	getPositions()
+	if marioX > rightmost then
+		rightmost = marioX
+		timeout = TimeoutConstant
+	end
+	
+	timeout = timeout - 1
+	
+	
+	local timeoutBonus = pool.currentFrame / 4
+	if timeout + timeoutBonus <= 0 then
+		local fitness = rightmost - pool.currentFrame / 2
+		if gameinfo.getromname() == "Super Mario World (USA)" and rightmost > 4816 then
+			fitness = fitness + 1000
+		end
+		if gameinfo.getromname() == "Super Mario Bros." and rightmost > 3186 then
+			fitness = fitness + 1000
+		end
+		if fitness == 0 then
+			fitness = -1
+		end
+		genome.fitness = fitness
+		
+		if fitness > pool.maxFitness then
+			pool.maxFitness = fitness
+			forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
+			writeFile("backup." .. pool.generation .. "." .. forms.gettext(saveLoadFile))
+		end
+		
+		console.writeline("Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness)
+		pool.currentSpecies = 1
+		pool.currentGenome = 1
+		while fitnessAlreadyMeasured() do
+			nextGenome()
+		end
+		initializeRun()
+	end
+
+	local measured = 0
+	local total = 0
+	for _,species in pairs(pool.species) do
+		for _,genome in pairs(species.genomes) do
+			total = total + 1
+			if genome.fitness ~= 0 then
+				measured = measured + 1
+			end
+		end
+	end
+	if not forms.ischecked(hideBanner) then
+		gui.drawText(0, 0, "Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " (" .. math.floor(measured/total*100) .. "%)", 0xFF000000, 11)
+		gui.drawText(0, 12, "Fitness: " .. math.floor(rightmost - (pool.currentFrame) / 2 - (timeout + timeoutBonus)*2/3), 0xFF000000, 11)
+		gui.drawText(100, 12, "Max Fitness: " .. math.floor(pool.maxFitness), 0xFF000000, 11)
+	end
+		
+	pool.currentFrame = pool.currentFrame + 1
+
+	emu.frameadvance();
 end
