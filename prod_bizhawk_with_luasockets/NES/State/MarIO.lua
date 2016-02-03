@@ -20,6 +20,15 @@ InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 Inputs = InputSize + 4
 Outputs = #ButtonNames
 
+<<<<<<< HEAD:prod_bizhawk_with_luasockets/NES/State/MarIO.lua
+=======
+levelsToPlay = [
+	"SMB1-1.State",
+	"SMB1-2.State",
+	"SMB1-3.State"
+]
+
+>>>>>>> 71518df6c27f84c1219895ce51f152f72a6b52fa:State/MarIO.lua
 compoundDistanceTraveled = 0
 
 Population = 300
@@ -1203,6 +1212,14 @@ resetMaxFitnessButton = forms.button(form, "Reset Max Fitness", resetMaxFitness,
 hideBanner = forms.checkbox(form, "Hide Banner", 5, 190)
 backgroundColor = 0xD0FFFFFF
 
+<<<<<<< HEAD:prod_bizhawk_with_luasockets/NES/State/MarIO.lua
+=======
+while true do
+	local backgroundColor = 0xD0FFFFFF
+	if not forms.ischecked(hideBanner) then
+		gui.drawBox(0, 7, 300, 40, backgroundColor, backgroundColor)
+	end
+>>>>>>> 71518df6c27f84c1219895ce51f152f72a6b52fa:State/MarIO.lua
 
 function playGame(currentTotalFitness, species, genome, stateName)
 	savestate.load(stateName)
@@ -1233,6 +1250,7 @@ function playGame(currentTotalFitness, species, genome, stateName)
 			timeout = TimeoutConstant
 		end
 
+<<<<<<< HEAD:prod_bizhawk_with_luasockets/NES/State/MarIO.lua
 		local distanceFitness = compoundDistanceTraveled 
 		local timeFitnessPenalty = pool.currentFrame / 4
 		local fitness = distanceFitness - timeFitnessPenalty
@@ -1245,10 +1263,39 @@ function playGame(currentTotalFitness, species, genome, stateName)
 
 		-- Did we win? (set in getPositions)
 		if wonLevel then
+=======
+	getPositions()
+	if marioX > rightmost then
+		rightmost = marioX
+		compoundDistanceTraveled = rightmost
+		timeout = TimeoutConstant
+	end
+	
+	timeout = timeout - 1
+	playerDied = false
+
+	if playerState == 6 or playerState == 0x0B then
+		playerDied = true
+		console.writeline("Player Died")
+	end
+
+	local fitness = 100000 * (1 + marioWorld) + 10000 * marioLevel + compoundDistanceTraveled - (pool.currentFrame / 2)
+
+	if wonLevel then
+		-- Player sliding down flag pole
+		timeout = TimeoutConstant
+		fitness = fitness
+		-- console.writeline("playerState: " .. playerState)
+		if playerState == 8 then
+			-- fitness = fitness + 1000
+			rightmost = 0
+			-- console.writeline("Mario X: " .. marioX .. " Rightmost: " .. rightmost)
+>>>>>>> 71518df6c27f84c1219895ce51f152f72a6b52fa:State/MarIO.lua
 			wonLevel = false
 			return 10000 - timeFitnessPenalty
 		end
 
+<<<<<<< HEAD:prod_bizhawk_with_luasockets/NES/State/MarIO.lua
 		-- Did we time out?
 		timeout = timeout - 1
 		local timeoutBonus = pool.currentFrame / 4
@@ -1275,6 +1322,31 @@ function playGame(currentTotalFitness, species, genome, stateName)
 			gui.drawText(0, 22, "Fitness: " .. math.floor(currentTotalFitness + fitness), 0xFF000000, 11)
 			gui.drawText(150, 22, "Max: " .. math.floor(pool.maxFitness), 0xFF000000, 11)
 			--console.writeline(tostring(inputs[#inputs-4]) .. " : " .. tostring(inputs[#inputs-3]) .. " : " .. tostring(inputs[#inputs-2]) .. " : " .. tostring(inputs[#inputs-1]))
+=======
+		-- 	levelScore = 100000 * (1 + marioWorld) + 10000 * marioLevel
+	    -- currentPositionScore = rightmost - pool.currentFrame / 2
+		--local fitness = rightmost - pool.currentFrame / 2 -- position in level
+		--fitness = fitness + 100000 * (1 + marioWorld) + 10000 * marioLevel		
+		-- local fitness = 100000 * (1 + marioWorld) + 10000 * marioLevel + compoundDistanceTraveled - (pool.currentFrame / 2)
+
+		compoundDistanceTraveled = 0
+
+		if gameinfo.getromname() == "Super Mario World (USA)" and rightmost > 4816 then
+			fitness = fitness + 1000
+		end
+
+		if fitness == 0 then
+			fitness = -1
+		end
+
+		genome.fitness = fitness
+		
+		if fitness > pool.maxFitness then
+			pool.maxFitness = fitness
+			console.writeline("New Max Fitness: " .. math.floor(pool.maxFitness))
+			forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
+			writeFile("backup." .. pool.generation .. "." .. forms.gettext(saveLoadFile))
+>>>>>>> 71518df6c27f84c1219895ce51f152f72a6b52fa:State/MarIO.lua
 		end
 		
 		-- Advance frame since we didn't win / die
@@ -1308,11 +1380,19 @@ while true do
 		console.writeline("writing backup file in fitness > pool.maxFitness")
 		writeFile("backup." .. pool.generation .. "." .. forms.gettext(saveLoadFile))
 	end
+<<<<<<< HEAD:prod_bizhawk_with_luasockets/NES/State/MarIO.lua
 	
 	console.writeline("Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness)
 	pool.currentSpecies = 1
 	pool.currentGenome = 1
 	while fitnessAlreadyMeasured() do
 		nextGenome()
+=======
+	if not forms.ischecked(hideBanner) then
+		gui.drawText(0, 10, "Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " (" .. math.floor(measured/total*100) .. "%)", 0xFF000000, 11)
+		gui.drawText(0, 22, "Fitness: " .. math.floor(fitness), 0xFF000000, 11)
+		gui.drawText(150, 22, "Max: " .. math.floor(pool.maxFitness), 0xFF000000, 11)
+		--console.writeline(tostring(inputs[#inputs-4]) .. " : " .. tostring(inputs[#inputs-3]) .. " : " .. tostring(inputs[#inputs-2]) .. " : " .. tostring(inputs[#inputs-1]))
+>>>>>>> 71518df6c27f84c1219895ce51f152f72a6b52fa:State/MarIO.lua
 	end
 end
