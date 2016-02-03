@@ -46,16 +46,7 @@ MaxNodes = 1000000
 wonLevel = false
 
 function getPositions()
-	if gameinfo.getromname() == "Super Mario World (USA)" then
-		marioX = memory.read_s16_le(0x94)
-		marioY = memory.read_s16_le(0x96)
-		
-		local layer1x = memory.read_s16_le(0x1A);
-		local layer1y = memory.read_s16_le(0x1C);
-		
-		screenX = marioX-layer1x
-		screenY = marioY-layer1y
-	elseif gameinfo.getromname() == "Super Mario Bros." then
+	if gameinfo.getromname() == "Super Mario Bros." then
 		marioX = memory.readbyte(0x6D) * 0x100 + memory.readbyte(0x86)
 		marioY = memory.readbyte(0x03B8)+16
 
@@ -86,12 +77,7 @@ function getPositions()
 end
 
 function getTile(dx, dy)
-	if gameinfo.getromname() == "Super Mario World (USA)" then
-		x = math.floor((marioX+dx+8)/16)
-		y = math.floor((marioY+dy)/16)
-		
-		return memory.readbyte(0x1C800 + math.floor(x/0x10)*0x1B0 + y*0x10 + x%0x10)
-	elseif gameinfo.getromname() == "Super Mario Bros." then
+	if gameinfo.getromname() == "Super Mario Bros." then
 		local x = marioX + dx + 8
 		local y = marioY + dy - 16
 		local page = math.floor(x/256)%2
@@ -113,19 +99,7 @@ function getTile(dx, dy)
 end
 
 function getSprites()
-	if gameinfo.getromname() == "Super Mario World (USA)" then
-		local sprites = {}
-		for slot=0,11 do
-			local status = memory.readbyte(0x14C8+slot)
-			if status ~= 0 then
-				spritex = memory.readbyte(0xE4+slot) + memory.readbyte(0x14E0+slot)*256
-				spritey = memory.readbyte(0xD8+slot) + memory.readbyte(0x14D4+slot)*256
-				sprites[#sprites+1] = {["x"]=spritex, ["y"]=spritey}
-			end
-		end		
-		
-		return sprites
-	elseif gameinfo.getromname() == "Super Mario Bros." then
+	if gameinfo.getromname() == "Super Mario Bros." then
 		local sprites = {}
 		for slot=0,4 do
 			local enemy = memory.readbyte(0xF+slot)
@@ -141,19 +115,7 @@ function getSprites()
 end
 
 function getExtendedSprites()
-	if gameinfo.getromname() == "Super Mario World (USA)" then
-		local extended = {}
-		for slot=0,11 do
-			local number = memory.readbyte(0x170B+slot)
-			if number ~= 0 then
-				spritex = memory.readbyte(0x171F+slot) + memory.readbyte(0x1733+slot)*256
-				spritey = memory.readbyte(0x1715+slot) + memory.readbyte(0x1729+slot)*256
-				extended[#extended+1] = {["x"]=spritex, ["y"]=spritey}
-			end
-		end		
-		
-		return extended
-	elseif gameinfo.getromname() == "Super Mario Bros." then
+	if gameinfo.getromname() == "Super Mario Bros." then
 		return {}
 	end
 end
@@ -192,24 +154,10 @@ function getInputs()
 			end
 		end
 	end
-	--console.writeline("vx " .. marioVX)
-	--console.writeline("vy " .. marioVY)
-	--inputs[#inputs+1] = marioCurX
+
 	inputs[#inputs+1] = marioCurY
 	inputs[#inputs+1] = marioVX
 	inputs[#inputs+1] = marioVY
-
-	-- New inputs!!
-	if gameinfo.getromname() == "Super Mario Bros." then
-		--inputs[#inputs] = marioCurX
-		--inputs[#inputs] = marioCurY
-		--inputs[#inputs] = marioVX
-		--inputs[#inputs] = marioVY
-	end
-	-- New inputs!!
-	
-	--mariovx = memory.read_s8(0x7B)
-	--mariovy = memory.read_s8(0x7D)
 	
 	return inputs
 end
