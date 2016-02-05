@@ -1,6 +1,6 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local SERVER_IP = "129.21.252.86"
+local SERVER_IP = "127.0.0.1"
 
 -- random state (need to prune)
 
@@ -46,12 +46,6 @@ MaxNodes = 1000000
 wonLevel = false
 
 -- random state (need to prune)
-
--- find out which port the OS chose for us
---local ip, port = client:getsockname()
--- print a message informing what's up
---print("port: " .. port)
---print("After connecting, you have 100s to enter a line to be echoed")
 
 function mysplit(inputstr, sep)
 	if sep == nil then
@@ -187,7 +181,7 @@ function sigmoid(x)
 end
 
 function evaluateNetwork(network, inputs)
-	table.insert(inputs, 1)
+	table.insert(inputs, 1) -- wtf is this?
 
 	if #inputs ~= Inputs then
 		console.writeline("Incorrect number of neural network inputs.")
@@ -254,10 +248,10 @@ function evaluateCurrent(network)
 end
 
 function playGame(stateName, network)
-	currentFrame = 0
+	local currentFrame = 0
 	savestate.load(stateName)
-	timeout = TimeoutConstant
-	rightmost = 0
+	local timeout = TimeoutConstant
+	local rightmost = 0
 
 	-- Play until we die / win
 	while true do
@@ -323,8 +317,10 @@ end
 while true do
 	emu.frameadvance()
 
+	local toks, stateId, iterationId, ok, network, fitness
+
 	-- connect to server
-	client, err = socket.connect(SERVER_IP, 56506)
+	local client, err = socket.connect(SERVER_IP, 56506)
 	if not err then
 		--print("connecting to: " .. client:getpeername())
 		client:settimeout(1000000)
@@ -346,7 +342,7 @@ while true do
 
 			toks = mysplit(response, "!")
 			stateId = toks[1]
-			iterationId = tonumber(toks[2])
+			iterationId = toks[2]
 			ok, network = serpent.load(toks[3])
 
 			-- TODO: validate inputs before using them!!
@@ -354,14 +350,14 @@ while true do
 				-- TODO bail out
 			end
 
-			local fitness = playGame(stateId .. ".State", network)
+			fitness = playGame(stateId .. ".State", network)
 			print("level: " .. stateId .. " fitness: " .. fitness)
 
 			-- Send it back yo
-			client, err = socket.connect(SERVER_IP, 56506)
-			if not err then
-				bytes, err = client:send("results!" .. stateId .. "!" .. iterationId .. "!" .. fitness .. "\n")
-				client:close()
+			local client2, err2 = socket.connect(SERVER_IP, 56506)
+			if not err2 then
+				client2:send("results!" .. stateId .. "!" .. iterationId .. "!" .. fitness .. "\n")
+				client2:close()
 			end
 
 		else
@@ -373,4 +369,6 @@ while true do
 
 	-- done with client, close the object
 	if client then client:close() end
+	if client2 then client2:close() end
+	collectgarbage()
 end
