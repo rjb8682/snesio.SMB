@@ -1,6 +1,6 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local SERVER_IP = "127.0.0.1"
+local SERVER_IP = "129.21.252.86"
 
 -- random state (need to prune)
 
