@@ -1199,7 +1199,7 @@ function playGame(currentTotalFitness, species, genome, stateName)
 		-- Did we time out?
 		timeout = timeout - 1
 		local timeoutBonus = pool.currentFrame / 4
-		if timeout + timeoutBonus <= 0  then
+		if timeout + timeoutBonus <= 0 or fitness < -100 then
 			compoundDistanceTraveled = 0
 			return distanceFitness - timeFitnessPenalty
 		end

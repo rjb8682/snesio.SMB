@@ -259,6 +259,7 @@ function playGame(stateName, network)
 		if currentFrame%4 == 0 then
 			evaluateCurrent(network)
 		end
+		joypad.set(controller)
 
 		-- Check how far we are in the level
 		getPositions()
@@ -287,7 +288,7 @@ function playGame(stateName, network)
 		-- Did we time out?
 		timeout = timeout - 1
 		local timeoutBonus = currentFrame / 4
-		if timeout + timeoutBonus <= 0  then
+		if timeout + timeoutBonus <= 0 or fitness < -100 then
 			compoundDistanceTraveled = 0
 			return distanceFitness - timeFitnessPenalty
 		end

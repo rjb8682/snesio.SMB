@@ -17,21 +17,57 @@ levels = {
 	{fitness = nil, active = true},  -- 2-2
 	{fitness = nil, active = true},  -- 2-3
 	{fitness = nil, active = false}, -- 2-4
-	{fitness = nil, active = false}, -- 3-1
+	{fitness = nil, active = true}, -- 3-1
 	{fitness = nil, active = true},  -- 3-2
 	{fitness = nil, active = true},  -- 3-3
 	{fitness = nil, active = false}, -- 3-4
 	{fitness = nil, active = true},  -- 4-1
-	{fitness = nil, active = false},  -- 4-2
+	{fitness = nil, active = true},  -- 4-2
 	{fitness = nil, active = true},  -- 4-3
 	{fitness = nil, active = false}, -- 4-4
-	{fitness = nil, active = false}, -- 5-1
+	{fitness = nil, active = true}, -- 5-1
 	{fitness = nil, active = true},  -- 5-2
 	{fitness = nil, active = true},  -- 5-3
 	{fitness = nil, active = false}, -- 5-4
-	{fitness = nil, active = false}, -- 6-1
-	{fitness = nil, active = false}, -- 6-2
-	{fitness = nil, active = false}, -- 6-3
+	{fitness = nil, active = true}, -- 6-1
+	{fitness = nil, active = true}, -- 6-2
+	{fitness = nil, active = true}, -- 6-3
+	{fitness = nil, active = false}, -- 6-4
+	{fitness = nil, active = true}, -- 7-1
+	{fitness = nil, active = true}, -- 7-2
+	{fitness = nil, active = true}, -- 7-3
+	{fitness = nil, active = false}, -- 7-4
+	{fitness = nil, active = true}, -- 8-1
+	{fitness = nil, active = true}, -- 8-2
+	{fitness = nil, active = true}, -- 8-3
+	{fitness = nil, active = false}  -- 8-4
+}
+
+--[[
+levels = {
+	{fitness = nil, active = true},  -- 1-1
+	{fitness = nil, active = true},  -- 1-2
+	{fitness = nil, active = true},  -- 1-3
+	{fitness = nil, active = false}, -- 1-4
+	{fitness = nil, active = true},  -- 2-1
+	{fitness = nil, active = true},  -- 2-2
+	{fitness = nil, active = true},  -- 2-3
+	{fitness = nil, active = false}, -- 2-4
+	{fitness = nil, active = true},  -- 3-1
+	{fitness = nil, active = true},  -- 3-2
+	{fitness = nil, active = true},  -- 3-3
+	{fitness = nil, active = false}, -- 3-4
+	{fitness = nil, active = true},  -- 4-1
+	{fitness = nil, active = true},  -- 4-2
+	{fitness = nil, active = true},  -- 4-3
+	{fitness = nil, active = false}, -- 4-4
+	{fitness = nil, active = true},  -- 5-1
+	{fitness = nil, active = true},  -- 5-2
+	{fitness = nil, active = true},  -- 5-3
+	{fitness = nil, active = false}, -- 5-4
+	{fitness = nil, active = true},  -- 6-1
+	{fitness = nil, active = true},  -- 6-2
+	{fitness = nil, active = true},  -- 6-3
 	{fitness = nil, active = false}, -- 6-4
 	{fitness = nil, active = false}, -- 7-1
 	{fitness = nil, active = false}, -- 7-2
@@ -42,6 +78,7 @@ levels = {
 	{fitness = nil, active = false}, -- 8-3
 	{fitness = nil, active = false}  -- 8-4
 }
+]]--
 
 levelIndex = 1
 
@@ -767,7 +804,7 @@ function newGeneration()
 	pool.generation = pool.generation + 1
 	
 	print("writing backup file in newGeneration")
-	writeFile("backup." .. pool.generation .. "." .. "SERVER_BACKUP_2")
+	writeFile("backup." .. pool.generation .. "." .. "NEW_GENERATION")
 end
 	
 function initializePool()
@@ -828,7 +865,7 @@ end
 -- deleted displayGenome (genome)
 
 function writeFile(filename)
-    local file = io.open(filename, "w")
+    local file = io.open("backups/" .. filename, "w")
 	file:write(pool.generation .. "\n")
 	file:write(pool.maxFitness .. "\n")
 	file:write(#pool.species .. "\n")
@@ -870,7 +907,7 @@ end
 
 function loadFile(filename)
 	print("CALLING LOADFILE")
-    local file = io.open(filename, "r")
+    local file = io.open("backups/" .. filename, "r")
 	pool = newPool()
 	pool.generation = file:read("*number")
 	pool.maxFitness = file:read("*number")
@@ -960,6 +997,7 @@ function getFitness(species, genome)
 		if nextLevel == nil then
 			-- Process results
 			local result = sumFitness()
+			print("\n######################################################################")
 			print("#################### GENERATION " .. iteration .. " FITNESS: " .. result .. " #####################")
 
 			-- Get new level
@@ -990,7 +1028,7 @@ function getFitness(species, genome)
 
 			if toks[1] == "request" then
 				local response = nextLevel .. "!" .. iteration .. "!" .. serpent.dump(genome.network) .. "\n"
-				--print("game requested. responding with " .. response)
+				print("REQUEST: " .. nextLevel)
 				client:send(response)
 
 				-- Since we got a request, advance to the next level.
@@ -1007,7 +1045,7 @@ function getFitness(species, genome)
 					-- TODO bail out
 				end
 
-				print("game results received for stateIndex " .. stateIndex .. " iteration " .. iterationId .. " fitness " .. fitnessResult)
+				print("                     RESULTS: level " .. stateIndex .. " iter: " .. iterationId .. " fitness: " .. fitnessResult)
 
 				-- Only use fresh results
 				if iterationId == iteration then
@@ -1038,13 +1076,13 @@ while true do
 		
 	if fitness > pool.maxFitness then
 		pool.maxFitness = fitness
-		print("New Max Fitness: " .. math.floor(pool.maxFitness))
 		--forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
-		print("writing backup file in fitness > pool.maxFitness")
-		writeFile("backup." .. pool.generation .. "." .. "SERVER_BACKUP")
+		writeFile("backup." .. pool.generation .. "." .. "NEW_BEST")
 	end
 	
-	print("Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness)
+	print("########### Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness .. " ########")
+	print("###################### Max Fitness: " .. math.floor(pool.maxFitness) .. "#############################")
+	print("##################################################################\n")
 	pool.currentSpecies = 1
 	pool.currentGenome = 1
 	while fitnessAlreadyMeasured() do
