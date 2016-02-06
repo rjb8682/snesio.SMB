@@ -1080,6 +1080,11 @@ function getFitness(species, genome)
 	end
 end
 
+-- Load backup if provided
+if #arg > 0 then
+	print("Loading backup: " .. arg[1])
+	loadFile(arg[1])
+end
 
 while true do
 
