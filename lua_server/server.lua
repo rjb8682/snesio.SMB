@@ -12,35 +12,35 @@ levels = {
 	{fitness = nil, active = true},  -- 1-1
 	{fitness = nil, active = true},  -- 1-2
 	{fitness = nil, active = true},  -- 1-3
-	{fitness = nil, active = false}, -- 1-4
+	{fitness = nil, active = false}, -- 1-4, castle
 	{fitness = nil, active = true},  -- 2-1
-	{fitness = nil, active = true},  -- 2-2
+	{fitness = nil, active = false},  -- 2-2, water level
 	{fitness = nil, active = true},  -- 2-3
-	{fitness = nil, active = false}, -- 2-4
+	{fitness = nil, active = false}, -- 2-4, castle
 	{fitness = nil, active = true}, -- 3-1
 	{fitness = nil, active = true},  -- 3-2
 	{fitness = nil, active = true},  -- 3-3
-	{fitness = nil, active = false}, -- 3-4
+	{fitness = nil, active = false}, -- 3-4, castle
 	{fitness = nil, active = true},  -- 4-1
 	{fitness = nil, active = true},  -- 4-2
 	{fitness = nil, active = true},  -- 4-3
-	{fitness = nil, active = false}, -- 4-4
+	{fitness = nil, active = false}, -- 4-4, castle
 	{fitness = nil, active = true}, -- 5-1
-	{fitness = nil, active = true},  -- 5-2
+	{fitness = nil, active = true},  -- 5-2,
 	{fitness = nil, active = true},  -- 5-3
-	{fitness = nil, active = false}, -- 5-4
+	{fitness = nil, active = false}, -- 5-4, castle
 	{fitness = nil, active = true}, -- 6-1
 	{fitness = nil, active = true}, -- 6-2
 	{fitness = nil, active = true}, -- 6-3
-	{fitness = nil, active = false}, -- 6-4
+	{fitness = nil, active = false}, -- 6-4, castle
 	{fitness = nil, active = true}, -- 7-1
-	{fitness = nil, active = true}, -- 7-2
+	{fitness = nil, active = false}, -- 7-2, water level
 	{fitness = nil, active = true}, -- 7-3
-	{fitness = nil, active = false}, -- 7-4
+	{fitness = nil, active = false}, -- 7-4, castle
 	{fitness = nil, active = true}, -- 8-1
 	{fitness = nil, active = true}, -- 8-2
 	{fitness = nil, active = true}, -- 8-3
-	{fitness = nil, active = false}  -- 8-4
+	{fitness = nil, active = false}  -- 8-4, castle
 }
 
 --[[
@@ -1026,8 +1026,27 @@ function getFitness(species, genome)
 				--print(k .. ": " .. v)
 			end
 
+			-- Calculating percent of generation done
+			local measured = 0
+			local total = 0
+			for _,species in pairs(pool.species) do
+				for _,genome in pairs(species.genomes) do
+					total = total + 1
+					if genome.fitness ~= 0 then
+						measured = measured + 1
+					end
+				end
+			end
+
 			if toks[1] == "request" then
-				local response = nextLevel .. "!" .. iteration .. "!" .. serpent.dump(genome.network) .. "\n"
+				local response = nextLevel .. "!" 
+								.. iteration .. "!" 
+								.. pool.generation .. "!" 
+								.. pool.currentSpecies .. "!" 
+								.. pool.currentGenome .. "!" 
+								.. math.floor(pool.maxFitness) .. "!" 
+								.. "(" .. math.floor(measured/total*100) .. "%)!"
+								.. serpent.dump(genome.network) .. "\n"
 				print("REQUEST: " .. nextLevel)
 				client:send(response)
 

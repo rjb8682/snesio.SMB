@@ -273,6 +273,14 @@ function playGame(stateName, network)
 		local timeFitnessPenalty = currentFrame / 4
 		local fitness = distanceFitness - timeFitnessPenalty
 
+		gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
+		gui.drawText(0, 10, "Gen " .. generation
+							.. " Species " .. currentSpecies
+							.. " Genome " .. currentGenome
+							.. " " .. percentage, 0xFF000000, 11)
+		gui.drawText(0, 22, "Fitness: " .. math.floor(fitness), 0xFF000000, 11)
+		gui.drawText(120, 22, "Total Max: " .. maxFitness, 0xFF000000, 11)
+
 		-- Check for death
 		if playerState == 6 or playerState == 0x0B or verticalScreenPosition > 1 then
 			console.writeline("Player Died")
@@ -292,21 +300,6 @@ function playGame(stateName, network)
 			compoundDistanceTraveled = 0
 			return distanceFitness - timeFitnessPenalty
 		end
-
-		-- TODO wtf is this (main loop)
-		--[[
-		local measured = 0
-		local total = 0
-		for _,species in pairs(pool.species) do
-			for _,genome in pairs(species.genomes) do
-				total = total + 1
-				if genome.fitness ~= 0 then
-					measured = measured + 1
-				end
-			end
-		end
-		-- TODO wtf is this
-		]]--
 		
 		-- Advance frame since we didn't win / die
 		currentFrame = currentFrame + 1
@@ -344,7 +337,12 @@ while true do
 			toks = mysplit(response, "!")
 			stateId = toks[1]
 			iterationId = toks[2]
-			ok, network = serpent.load(toks[3])
+			generation = toks[3]
+			currentSpecies = toks[4]
+			currentGenome = toks[5]
+			maxFitness = toks[6]
+			percentage = toks[7]
+			ok, network = serpent.load(toks[8])
 
 			-- TODO: validate inputs before using them!!
 			if not toks and stateId and ok and network then
