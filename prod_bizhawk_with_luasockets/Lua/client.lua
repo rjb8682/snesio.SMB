@@ -1,6 +1,9 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local SERVER_IP = "129.21.252.86"
+local SERVER_IP = "127.0.0.1"--"129.21.252.86"
+
+-- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
+--DEMO_FILE = "backup_network.gen0.genome1.species55.NEW_BEST"
 
 -- random state (need to prune)
 
@@ -307,6 +310,39 @@ function playGame(stateName, network)
 	end
 end
 
+function loadNetwork(filename)
+	local file = io.open(filename, "r")
+	local ok, network = serpent.load(file:read("*line"))
+	file:close()
+	return network
+end
+
+
+-- Play demo mode if set (see top of file)
+if DEMO_FILE then
+	local demoNetwork = loadNetwork(DEMO_FILE)
+	percentage = "666" -- I hate globals...
+	currentGenome = DEMO_FILE
+	currentSpecies = DEMO_FILE
+	generation = DEMO_FILE
+	maxFitness = 0
+	z = 1
+	while true do
+		-- Avoid castles and water levels
+		if z % 4 ~= 0 and z ~= 6 and z ~= 26 then
+			maxFitness = maxFitness + playGame(z .. ".State", demoNetwork)
+		end
+
+		z = z + 1
+		if z == 33 then
+			print("Total max fitness: " .. maxFitness)
+			maxFitness = 0
+			z = 1
+		end
+	end
+end
+
+
 -- loop forever waiting for games to play
 while true do
 	emu.frameadvance()
@@ -317,7 +353,7 @@ while true do
 	local client, err = socket.connect(SERVER_IP, 56506)
 	if not err then
 		--print("connecting to: " .. client:getpeername())
-		client:settimeout(1000000)
+		client:settimeout(1)
 
 		--print("Sending request...")
 		bytes, err = client:send("request\n")

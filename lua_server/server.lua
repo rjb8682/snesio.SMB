@@ -14,10 +14,10 @@ levels = {
 	{fitness = nil, active = true},  -- 1-3
 	{fitness = nil, active = false}, -- 1-4, castle
 	{fitness = nil, active = true},  -- 2-1
-	{fitness = nil, active = false},  -- 2-2, water level
+	{fitness = nil, active = false}, -- 2-2, water level
 	{fitness = nil, active = true},  -- 2-3
 	{fitness = nil, active = false}, -- 2-4, castle
-	{fitness = nil, active = true}, -- 3-1
+	{fitness = nil, active = true},  -- 3-1
 	{fitness = nil, active = true},  -- 3-2
 	{fitness = nil, active = true},  -- 3-3
 	{fitness = nil, active = false}, -- 3-4, castle
@@ -25,62 +25,27 @@ levels = {
 	{fitness = nil, active = true},  -- 4-2
 	{fitness = nil, active = true},  -- 4-3
 	{fitness = nil, active = false}, -- 4-4, castle
-	{fitness = nil, active = true}, -- 5-1
+	{fitness = nil, active = true},  -- 5-1
 	{fitness = nil, active = true},  -- 5-2,
 	{fitness = nil, active = true},  -- 5-3
 	{fitness = nil, active = false}, -- 5-4, castle
-	{fitness = nil, active = true}, -- 6-1
-	{fitness = nil, active = true}, -- 6-2
-	{fitness = nil, active = true}, -- 6-3
-	{fitness = nil, active = false}, -- 6-4, castle
-	{fitness = nil, active = true}, -- 7-1
-	{fitness = nil, active = false}, -- 7-2, water level
-	{fitness = nil, active = true}, -- 7-3
-	{fitness = nil, active = false}, -- 7-4, castle
-	{fitness = nil, active = true}, -- 8-1
-	{fitness = nil, active = true}, -- 8-2
-	{fitness = nil, active = true}, -- 8-3
-	{fitness = nil, active = false}  -- 8-4, castle
-}
-
---[[
-levels = {
-	{fitness = nil, active = true},  -- 1-1
-	{fitness = nil, active = true},  -- 1-2
-	{fitness = nil, active = true},  -- 1-3
-	{fitness = nil, active = false}, -- 1-4
-	{fitness = nil, active = true},  -- 2-1
-	{fitness = nil, active = true},  -- 2-2
-	{fitness = nil, active = true},  -- 2-3
-	{fitness = nil, active = false}, -- 2-4
-	{fitness = nil, active = true},  -- 3-1
-	{fitness = nil, active = true},  -- 3-2
-	{fitness = nil, active = true},  -- 3-3
-	{fitness = nil, active = false}, -- 3-4
-	{fitness = nil, active = true},  -- 4-1
-	{fitness = nil, active = true},  -- 4-2
-	{fitness = nil, active = true},  -- 4-3
-	{fitness = nil, active = false}, -- 4-4
-	{fitness = nil, active = true},  -- 5-1
-	{fitness = nil, active = true},  -- 5-2
-	{fitness = nil, active = true},  -- 5-3
-	{fitness = nil, active = false}, -- 5-4
 	{fitness = nil, active = true},  -- 6-1
 	{fitness = nil, active = true},  -- 6-2
 	{fitness = nil, active = true},  -- 6-3
-	{fitness = nil, active = false}, -- 6-4
-	{fitness = nil, active = false}, -- 7-1
-	{fitness = nil, active = false}, -- 7-2
-	{fitness = nil, active = false}, -- 7-3
-	{fitness = nil, active = false}, -- 7-4
-	{fitness = nil, active = false}, -- 8-1
-	{fitness = nil, active = false}, -- 8-2
-	{fitness = nil, active = false}, -- 8-3
-	{fitness = nil, active = false}  -- 8-4
+	{fitness = nil, active = false}, -- 6-4, castle
+	{fitness = nil, active = true},  -- 7-1
+	{fitness = nil, active = false}, -- 7-2, water level
+	{fitness = nil, active = true},  -- 7-3
+	{fitness = nil, active = false}, -- 7-4, castle
+	{fitness = nil, active = true},  -- 8-1
+	{fitness = nil, active = true},  -- 8-2
+	{fitness = nil, active = true},  -- 8-3
+	{fitness = nil, active = false}  -- 8-4, castle
 }
-]]--
 
 levelIndex = 1
+
+-- TODO: SAVE FITNESS IN FILENAME!!!
 
 function nextUnfinishedLevel()
 	local i = levelIndex
@@ -899,6 +864,20 @@ function writeFile(filename)
         file:close()
 end
 
+function writeNetwork(filename, network)
+    local file = io.open("backups/networks/" .. filename, "w")
+	file:write(serpent.dump(network))
+	file:write("\n")
+    file:close()
+end
+
+function loadNetwork(filename)
+	local file = io.open("backups/networks/" .. filename, "r")
+	local network = serpent.load(file:read("*line"))
+	file:close()
+	return network
+end
+
 function savePool()
 	local filename = "SERVER_BACKUP_3" 
 	print("writing file in savePool")
@@ -944,7 +923,7 @@ function loadFile(filename)
 			end
 		end
 	end
-        file:close()
+    file:close()
 	
 	while fitnessAlreadyMeasured() do
 		nextGenome()
@@ -1086,6 +1065,8 @@ if #arg > 0 then
 	loadFile(arg[1])
 end
 
+
+
 while true do
 
 	initializeRun()
@@ -1101,7 +1082,8 @@ while true do
 	if fitness > pool.maxFitness then
 		pool.maxFitness = fitness
 		--forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
-		writeFile("backup." .. pool.generation .. "." .. "NEW_BEST")
+		writeFile("backup." .. pool.generation .. ".NEW_BEST")
+		writeNetwork("backup_network.gen" .. pool.generation .. ".genome" .. pool.currentGenome .. ".species" .. pool.currentSpecies .. ".NEW_BEST", genome.network)
 	end
 	
 	print("########### Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness .. " ########")
