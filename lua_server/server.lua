@@ -1083,7 +1083,7 @@ while true do
 		pool.maxFitness = fitness
 		--forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
 		writeFile("backup." .. pool.generation .. ".NEW_BEST")
-		writeNetwork("backup_network.gen" .. pool.generation .. ".genome" .. pool.currentGenome .. ".species" .. pool.currentSpecies .. ".NEW_BEST", genome.network)
+		writeNetwork("backup_network.fitness" .. pool.maxFitness .. ".gen" .. pool.generation .. ".genome" .. pool.currentGenome .. ".species" .. pool.currentSpecies .. ".NEW_BEST", genome.network)
 	end
 	
 	print("########### Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness .. " ########")

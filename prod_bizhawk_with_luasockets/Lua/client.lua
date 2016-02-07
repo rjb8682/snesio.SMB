@@ -1,6 +1,6 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local SERVER_IP = "127.0.0.1"--"129.21.252.86"
+local SERVER_IP = "129.21.252.86"
 
 -- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
 --DEMO_FILE = "backup_network.gen0.genome1.species55.NEW_BEST"
