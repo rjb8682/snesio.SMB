@@ -3,7 +3,7 @@ local socket = require("socket")
 local SERVER_IP = "129.21.252.86"
 
 -- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
---DEMO_FILE = "backup_network.gen0.genome1.species55.NEW_BEST"
+--DEMO_FILE = "53550.ai"
 
 -- random state (need to prune)
 
@@ -20,7 +20,7 @@ ButtonNames = {
 BoxRadius = 6
 InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 
-Inputs = InputSize + 4
+Inputs = InputSize + 3
 Outputs = #ButtonNames
 
 compoundDistanceTraveled = 0
@@ -172,7 +172,6 @@ function getInputs()
 		end
 	end
 
-	inputs[#inputs+1] = marioCurY
 	inputs[#inputs+1] = marioVX
 	inputs[#inputs+1] = marioVY
 	

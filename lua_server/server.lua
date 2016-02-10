@@ -109,7 +109,7 @@ ButtonNames = {
 BoxRadius = 6
 InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 
-Inputs = InputSize + 4
+Inputs = InputSize + 3
 Outputs = #ButtonNames
 
 compoundDistanceTraveled = 0
