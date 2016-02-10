@@ -20,7 +20,7 @@ ButtonNames = {
 BoxRadius = 6
 InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 
-Inputs = InputSize + 4
+Inputs = InputSize + 3
 Outputs = #ButtonNames
 
 compoundDistanceTraveled = 0
@@ -172,7 +172,6 @@ function getInputs()
 		end
 	end
 
-	inputs[#inputs+1] = marioCurY
 	inputs[#inputs+1] = marioVX
 	inputs[#inputs+1] = marioVY
 	
