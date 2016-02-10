@@ -1,3 +1,6 @@
 *.pool
 *.NEW_BEST
 *.NEW_GENERATION
+*.SERVER_BACKUP
+*.SERVER_BACKUP_2
+*.network
