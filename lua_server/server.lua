@@ -978,6 +978,7 @@ printf = function(s,...)
 lastSumFitness = 0
 function printBoard() 
 	os.execute("cls")
+	-- TODO: put in one big printf call
 	-- Print previous results
 	print("######################################################################")
 	printf("########   Gen %3d species %3d genome %3d fitness: %6d   ##########\n", pool.generation, pool.currentSpecies, pool.currentGenome, math.floor(lastSumFitness))
