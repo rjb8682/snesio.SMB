@@ -8,39 +8,42 @@ print(ip .. ":" .. port)
 -- The number of genomes we've run through (times all levels have been played)
 iteration = 0
 
+-- Increment this when breaking changes are made (will cause old clients to be ignored)
+local VERSION_CODE = 1
+
 levels = {
-	{fitness = nil, active = true},  -- 1-1
-	{fitness = nil, active = true},  -- 1-2
-	{fitness = nil, active = true},  -- 1-3
-	{fitness = nil, active = false}, -- 1-4, castle
-	{fitness = nil, active = true},  -- 2-1
-	{fitness = nil, active = false}, -- 2-2, water level
-	{fitness = nil, active = true},  -- 2-3
-	{fitness = nil, active = false}, -- 2-4, castle
-	{fitness = nil, active = true},  -- 3-1
-	{fitness = nil, active = true},  -- 3-2
-	{fitness = nil, active = true},  -- 3-3
-	{fitness = nil, active = false}, -- 3-4, castle
-	{fitness = nil, active = true},  -- 4-1
-	{fitness = nil, active = true},  -- 4-2
-	{fitness = nil, active = true},  -- 4-3
-	{fitness = nil, active = false}, -- 4-4, castle
-	{fitness = nil, active = true},  -- 5-1
-	{fitness = nil, active = true},  -- 5-2,
-	{fitness = nil, active = true},  -- 5-3
-	{fitness = nil, active = false}, -- 5-4, castle
-	{fitness = nil, active = true},  -- 6-1
-	{fitness = nil, active = true},  -- 6-2
-	{fitness = nil, active = true},  -- 6-3
-	{fitness = nil, active = false}, -- 6-4, castle
-	{fitness = nil, active = true},  -- 7-1
-	{fitness = nil, active = false}, -- 7-2, water level
-	{fitness = nil, active = true},  -- 7-3
-	{fitness = nil, active = false}, -- 7-4, castle
-	{fitness = nil, active = true},  -- 8-1
-	{fitness = nil, active = true},  -- 8-2
-	{fitness = nil, active = true},  -- 8-3
-	{fitness = nil, active = false}  -- 8-4, castle
+	{fitness = nil, active = true, kind = "land"},  -- 1-1
+	{fitness = nil, active = true, kind = "land"},  -- 1-2
+	{fitness = nil, active = true, kind = "land"},  -- 1-3
+	{fitness = nil, active = false, kind = "castle"}, -- 1-4, castle
+	{fitness = nil, active = true, kind = "land"},  -- 2-1
+	{fitness = nil, active = false, kind = "water"}, -- 2-2, water level
+	{fitness = nil, active = true, kind = "land"},  -- 2-3
+	{fitness = nil, active = false, kind = "castle"}, -- 2-4, castle
+	{fitness = nil, active = true, kind = "land"},  -- 3-1
+	{fitness = nil, active = true, kind = "land"},  -- 3-2
+	{fitness = nil, active = true, kind = "land"},  -- 3-3
+	{fitness = nil, active = false, kind = "castle"}, -- 3-4, castle
+	{fitness = nil, active = true, kind = "land"},  -- 4-1
+	{fitness = nil, active = true, kind = "land"},  -- 4-2
+	{fitness = nil, active = true, kind = "land"},  -- 4-3
+	{fitness = nil, active = false, kind = "castle"}, -- 4-4, castle
+	{fitness = nil, active = true, kind = "land"},  -- 5-1
+	{fitness = nil, active = true, kind = "land"},  -- 5-2,
+	{fitness = nil, active = true, kind = "land"},  -- 5-3
+	{fitness = nil, active = false, kind = "castle"}, -- 5-4, castle
+	{fitness = nil, active = true, kind = "land"},  -- 6-1
+	{fitness = nil, active = true, kind = "land"},  -- 6-2
+	{fitness = nil, active = true, kind = "land"},  -- 6-3
+	{fitness = nil, active = false, kind = "castle"}, -- 6-4, castle
+	{fitness = nil, active = true, kind = "land"},  -- 7-1
+	{fitness = nil, active = false, kind = "water"}, -- 7-2, water level
+	{fitness = nil, active = true, kind = "land"},  -- 7-3
+	{fitness = nil, active = false, kind = "castle"}, -- 7-4, castle
+	{fitness = nil, active = true, kind = "land"},  -- 8-1
+	{fitness = nil, active = true, kind = "land"},  -- 8-2
+	{fitness = nil, active = true, kind = "land"},  -- 8-3
+	{fitness = nil, active = false, kind = "castle"}  -- 8-4, castle
 }
 
 levelIndex = 1
@@ -68,6 +71,7 @@ end
 function clearLevels()
 	for i = 1, #levels, 1 do
 		levels[i].fitness = nil
+		levels[i].lastRequester = ""
 	end
 	levelIndex = 1
 	iteration = iteration + 1
@@ -967,8 +971,44 @@ writeFile("temp.pool")
 
 -- deleted playGame
 
+printf = function(s,...)
+           return io.write(s:format(...))
+         end -- function
+
+lastSumFitness = 0
+function printBoard() 
+	os.execute("cls")
+	-- Print previous results
+	print("######################################################################")
+	printf("########   Gen %3d species %3d genome %3d fitness: %6d   ##########\n", pool.generation, pool.currentSpecies, pool.currentGenome, math.floor(lastSumFitness))
+	printf("###################    Max Fitness: %6d    ########################\n", math.floor(pool.maxFitness))
+	print("######################################################################")
+
+	printf("| lvl | client             |----| fitness       |\n", i)
+	for i=1, #levels do
+		if levels[i].active then
+			if levels[i].fitness then
+				printf("|  %2d | %18s |\t|    %10.2f |\n", i, levels[i].lastRequester, levels[i].fitness)
+			else
+				printf("|  %2d | %18s |\t|               |\n", i, levels[i].lastRequester)
+			end
+		else
+			local fill = "-------------------------------------------------------"
+			if levels[i].kind == "water" then
+				fill = "            Oo~Oo~Oo~Oo~Oo~Oo~           "
+			else
+				if levels[i].kind == "castle" then
+					fill = "_____________[^]__[^_^]__[^]_____________"
+				end
+			end
+			printf("|  %2d |%30s|\n", i, fill)
+		end
+	end
+end
+
 -- loop forever waiting for clients
 function getFitness(species, genome)
+	clearLevels()
 	local nextLevel = nextUnfinishedLevel()
 	while true do
 
@@ -976,8 +1016,6 @@ function getFitness(species, genome)
 		if nextLevel == nil then
 			-- Process results
 			local result = sumFitness()
-			print("\n######################################################################")
-			print("#################### GENERATION " .. iteration .. " FITNESS: " .. result .. " #####################")
 
 			-- Get new level
 			nextLevel = nextUnfinishedLevel()
@@ -1026,7 +1064,8 @@ function getFitness(species, genome)
 								.. math.floor(pool.maxFitness) .. "!" 
 								.. "(" .. math.floor(measured/total*100) .. "%)!"
 								.. serpent.dump(genome.network) .. "\n"
-				print("REQUEST: " .. nextLevel)
+				--print("REQUEST: " .. nextLevel)
+				levels[nextLevel].lastRequester = toks[2]
 				client:send(response)
 
 				-- Since we got a request, advance to the next level.
@@ -1037,19 +1076,29 @@ function getFitness(species, genome)
 				stateIndex = tonumber(toks[2])
 				iterationId = tonumber(toks[3])
 				fitnessResult = tonumber(toks[4])
+				versionCode = tonumber(toks[5])
+				clientId = toks[6]
 
 				-- TODO: validate inputs before using them!!
 				if not stateIndex and iterationId and fitnessResult then
 					-- TODO bail out
 				end
 
-				print("                     RESULTS: level " .. stateIndex .. " iter: " .. iterationId .. " fitness: " .. fitnessResult)
-
-				-- Only use fresh results
-				if iterationId == iteration then
+				--[[
+				print("\t\t\tRESULTS: level " .. stateIndex
+					.. " iter: " .. iterationId
+					.. " fitness: " .. fitnessResult
+					.. "\n\t\t\t\tversionCode: " .. versionCode
+					.. " client: " .. clientId)
+				]]--
+				-- Only use fresh results from new clients
+				if iterationId == iteration and versionCode == VERSION_CODE then
 					levels[stateIndex].fitness = fitnessResult
+					levels[stateIndex].lastRequester = clientId
 				end
 			end
+
+			printBoard()
 		else
 			print("Error: " .. err)
 		end
@@ -1065,8 +1114,6 @@ if #arg > 0 then
 	loadFile(arg[1])
 end
 
-
-
 while true do
 
 	initializeRun()
@@ -1076,7 +1123,7 @@ while true do
 
 	-- This calls the clients
 	local fitness = getFitness(species, genome)
-
+	lastSumFitness = fitness
 	genome.fitness = fitness
 		
 	if fitness > pool.maxFitness then
@@ -1085,10 +1132,7 @@ while true do
 		writeFile("backup." .. pool.generation .. ".NEW_BEST")
 		writeNetwork("backup_network.fitness" .. pool.maxFitness .. ".gen" .. pool.generation .. ".genome" .. pool.currentGenome .. ".species" .. pool.currentSpecies .. ".NEW_BEST", genome.network)
 	end
-	
-	print("########### Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness .. " ########")
-	print("###################### Max Fitness: " .. math.floor(pool.maxFitness) .. "#############################")
-	print("##################################################################\n")
+
 	pool.currentSpecies = 1
 	pool.currentGenome = 1
 	while fitnessAlreadyMeasured() do

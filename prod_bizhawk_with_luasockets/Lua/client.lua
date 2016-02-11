@@ -2,6 +2,28 @@ local serpent = require("serpent")
 local socket = require("socket")
 local SERVER_IP = "129.21.252.86"
 
+-- Increment this when breaking changes are made (will cause old clients to be ignored)
+local VERSION_CODE = 1
+
+function initConfigFile()
+	-- Set default config file state here
+	config = {clientId = "default_client"}
+	local file = io.open("config.txt", "w")
+	file:write(serpent.block(config))
+	file:close()
+end
+function loadConfigFile()
+	local file = io.open("config.txt", "w")
+	if not file then
+		initConfigFile()
+	else
+		ok, config = serpent.load(file:read("*line"))
+		if not ok then initConfigFile() end
+		file:close()
+	end
+end
+initConfigFile()
+
 -- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
 --DEMO_FILE = "53550.ai"
 
@@ -355,7 +377,7 @@ while true do
 		client:settimeout(1)
 
 		--print("Sending request...")
-		bytes, err = client:send("request\n")
+		bytes, err = client:send("request!" .. config.clientId .. "\n")
 		if not err then
 			--print("Bytes: " .. bytes)
 		else
@@ -390,7 +412,7 @@ while true do
 			-- Send it back yo
 			local client2, err2 = socket.connect(SERVER_IP, 56506)
 			if not err2 then
-				client2:send("results!" .. stateId .. "!" .. iterationId .. "!" .. fitness .. "\n")
+				client2:send("results!" .. stateId .. "!" .. iterationId .. "!" .. fitness .. "!" .. VERSION_CODE .. "!" .. config.clientId .. "\n")
 				client2:close()
 			end
 
