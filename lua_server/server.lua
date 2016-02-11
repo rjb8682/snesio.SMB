@@ -990,11 +990,13 @@ function printBoard()
 
 	printString = printString .. string.format("| lvl | client             |----| fitness       |\n", i)
 	for i=1, #levels do
+		local world = math.floor((i - 1) / 4) + 1
+		local level = ((i - 1) % 4) + 1
 		if levels[i].active then
 			if levels[i].fitness then
-				printString = printString .. string.format("|  %2d | %18s |\t|    %10.2f |\n", i, levels[i].lastRequester, levels[i].fitness)
+				printString = printString .. string.format("| %1d-%1d | %18s |\t|    %10.2f |\n", world, level, levels[i].lastRequester, levels[i].fitness)
 			else
-				printString = printString .. string.format("|  %2d | %18s |\t|               |\n", i, levels[i].lastRequester)
+				printString = printString .. string.format("| %1d-%1d | %18s |\t|               |\n", world, level, levels[i].lastRequester)
 			end
 		else
 			local fill = "-------------------------------------------------------"
@@ -1005,7 +1007,7 @@ function printBoard()
 					fill = "_____________[^]__[^_^]__[^]_____________"
 				end
 			end
-			printString = printString .. string.format("|  %2d |%30s|\n", i, fill)
+			printString = printString .. string.format("| %1d-%1d |%30s|\n", world, level, fill)
 		end
 	end
 	print(printString)
