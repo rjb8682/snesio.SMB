@@ -395,8 +395,8 @@ while true do
 			percentage = toks[7]
 			ok, network = serpent.load(toks[8])
 
-			dist, frames, wonLevel, reason = playGame(stateId .. ".State", network)
-			print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames)
+			local dist, frames, wonLevel, reason = playGame(stateId .. ".State", network)
+			print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason)
 
 			-- Send it back yo
 			local client2, err2 = socket.connect(SERVER_IP, 56506)
