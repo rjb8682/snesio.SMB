@@ -22,7 +22,7 @@ function loadConfigFile()
 		file:close()
 	end
 end
-initConfigFile()
+loadConfigFile()
 
 -- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
 --DEMO_FILE = "53550.ai"
