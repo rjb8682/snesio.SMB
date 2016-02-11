@@ -977,20 +977,24 @@ printf = function(s,...)
 
 lastSumFitness = 0
 function printBoard() 
-	os.execute("cls")
+	--os.execute("cls")
 	-- Print previous results
-	print("######################################################################")
-	printf("########   Gen %3d species %3d genome %3d fitness: %6d   ##########\n", pool.generation, pool.currentSpecies, pool.currentGenome, math.floor(lastSumFitness))
-	printf("###################    Max Fitness: %6d    ########################\n", math.floor(pool.maxFitness))
-	print("######################################################################")
+	local printString = "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+	printString = printString .. "######################################################################\n"
+	printString = printString .. string.format("########   Gen %3d species %3d genome %3d fitness: %6d   ##########\n", pool.generation,
+																													pool.currentSpecies,
+																													pool.currentGenome,
+																													math.floor(lastSumFitness))
+	printString = printString .. string.format("###################    Max Fitness: %6d    ########################\n", math.floor(pool.maxFitness))
+	printString = printString .. "######################################################################\n"
 
-	printf("| lvl | client             |----| fitness       |\n", i)
+	printString = printString .. string.format("| lvl | client             |----| fitness       |\n", i)
 	for i=1, #levels do
 		if levels[i].active then
 			if levels[i].fitness then
-				printf("|  %2d | %18s |\t|    %10.2f |\n", i, levels[i].lastRequester, levels[i].fitness)
+				printString = printString .. string.format("|  %2d | %18s |\t|    %10.2f |\n", i, levels[i].lastRequester, levels[i].fitness)
 			else
-				printf("|  %2d | %18s |\t|               |\n", i, levels[i].lastRequester)
+				printString = printString .. string.format("|  %2d | %18s |\t|               |\n", i, levels[i].lastRequester)
 			end
 		else
 			local fill = "-------------------------------------------------------"
@@ -1001,9 +1005,10 @@ function printBoard()
 					fill = "_____________[^]__[^_^]__[^]_____________"
 				end
 			end
-			printf("|  %2d |%30s|\n", i, fill)
+			printString = printString .. string.format("|  %2d |%30s|\n", i, fill)
 		end
 	end
+	print(printString)
 end
 
 -- loop forever waiting for clients
