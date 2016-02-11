@@ -976,10 +976,10 @@ printf = function(s,...)
          end -- function
 
 lastSumFitness = 0
-function printBoard() 
-	--os.execute("cls")
+function printBoard()
+	os.execute("cls")
 	-- Print previous results
-	local printString = "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+	local printString = ""--\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
 	printString = printString .. "######################################################################\n"
 	printString = printString .. string.format("########   Gen %3d species %3d genome %3d fitness: %6d   ##########\n", pool.generation,
 																													pool.currentSpecies,

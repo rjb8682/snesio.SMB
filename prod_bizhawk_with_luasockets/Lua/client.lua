@@ -9,20 +9,24 @@ function initConfigFile()
 	-- Set default config file state here
 	config = {clientId = "default_client"}
 	local file = io.open("config.txt", "w")
-	file:write(serpent.block(config))
+	file:write(serpent.dump(config))
 	file:close()
 end
 function loadConfigFile()
-	local file = io.open("config.txt", "w")
+	local file = io.open("config.txt", "r")
 	if not file then
+		print("couldn't open config file, creating default")
 		initConfigFile()
 	else
 		ok, config = serpent.load(file:read("*line"))
-		if not ok then initConfigFile() end
 		file:close()
+		if not ok then
+			print("bad config file, creating default")
+			initConfigFile()
+		end
 	end
 end
-initConfigFile()
+loadConfigFile()
 
 -- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
 --DEMO_FILE = "53550.ai"
