@@ -9,7 +9,7 @@ print(ip .. ":" .. port)
 iteration = 0
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 1
+local VERSION_CODE = 2
 
 levels = {
 	{fitness = nil, active = true, kind = "land"},  -- 1-1
@@ -77,12 +77,20 @@ function clearLevels()
 	iteration = iteration + 1
 end
 
+function getWorldAndLevel(i)
+	local world = math.floor((i - 1) / 4) + 1
+	local level = ((i - 1) % 4) + 1
+	return world, level
+end
+
 -- Returns the sum of the fitness for this iteration
 function sumFitness()
 	local result = 0
 	for i = 1, #levels do
 		if levels[i].active then
-			result = result + levels[i].fitness
+			local world, level = getWorldAndLevel(i)
+			local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
+			result = result + (levels[i].fitness*multi)
 		end
 	end
 	return result
@@ -136,6 +144,9 @@ DisableMutationChance = 0.4
 EnableMutationChance = 0.2
 
 TimeoutConstant = 20
+
+WorldAugmenter = 0.2
+LevelAugmenter = 0.1
 
 MaxNodes = 1000000
 
@@ -977,6 +988,9 @@ printf = function(s,...)
 
 lastSumFitness = 0
 function printBoard()
+
+	-- TODO: PRINT THE REASON FOR SUCCESS/DEATH!!!
+
 	os.execute("cls")
 	-- Print previous results
 	local printString = ""--\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
@@ -990,8 +1004,7 @@ function printBoard()
 
 	printString = printString .. string.format("| lvl | client             |----| fitness       |\n", i)
 	for i=1, #levels do
-		local world = math.floor((i - 1) / 4) + 1
-		local level = ((i - 1) % 4) + 1
+		local world, level = getWorldAndLevel(i)
 		if levels[i].active then
 			if levels[i].fitness then
 				printString = printString .. string.format("| %1d-%1d | %18s |\t|    %10.2f |\n", world, level, levels[i].lastRequester, levels[i].fitness)
@@ -1011,6 +1024,15 @@ function printBoard()
 		end
 	end
 	print(printString)
+end
+
+function calculateFitness(distance, frames, wonLevel, reason)
+	local result = distance
+	timePenalty = frames / 4
+	if wonLevel then
+		result = result + 5000
+	end
+	return result
 end
 
 -- loop forever waiting for clients
@@ -1082,22 +1104,15 @@ function getFitness(species, genome)
 			if toks[1] == "results" then
 				stateIndex = tonumber(toks[2])
 				iterationId = tonumber(toks[3])
-				fitnessResult = tonumber(toks[4])
-				versionCode = tonumber(toks[5])
-				clientId = toks[6]
+				distance = tonumber(toks[4])
+				frames = tonumber(toks[5])
+				wonLevel = tonumber(toks[6]) == "1"
+				reason = tonumber(toks[7])
+				versionCode = tonumber(toks[8])
+				clientId = toks[9]
 
-				-- TODO: validate inputs before using them!!
-				if not stateIndex and iterationId and fitnessResult then
-					-- TODO bail out
-				end
+				fitnessResult = calculateFitness(distance, frames, wonLevel, reason)
 
-				--[[
-				print("\t\t\tRESULTS: level " .. stateIndex
-					.. " iter: " .. iterationId
-					.. " fitness: " .. fitnessResult
-					.. "\n\t\t\t\tversionCode: " .. versionCode
-					.. " client: " .. clientId)
-				]]--
 				-- Only use fresh results from new clients
 				if iterationId == iteration and versionCode == VERSION_CODE then
 					levels[stateIndex].fitness = fitnessResult

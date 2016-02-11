@@ -3,7 +3,7 @@ local socket = require("socket")
 local SERVER_IP = "129.21.252.86"
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 1
+local VERSION_CODE = 2
 
 function initConfigFile()
 	-- Set default config file state here
@@ -297,9 +297,7 @@ function playGame(stateName, network)
 			timeout = TimeoutConstant
 		end
 
-		local distanceFitness = compoundDistanceTraveled 
-		local timeFitnessPenalty = currentFrame / 4
-		local fitness = distanceFitness - timeFitnessPenalty
+		fitness = compoundDistanceTraveled - (currentFrame / 4)
 
 		gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
 		gui.drawText(0, 10, "Gen " .. generation
@@ -312,13 +310,15 @@ function playGame(stateName, network)
 		-- Check for death
 		if playerState == 6 or playerState == 0x0B or verticalScreenPosition > 1 then
 			console.writeline("Player Died")
-			return distanceFitness - timeFitnessPenalty
+			local reason = "enemyDeath"
+			if verticalScreenPosition > 1 then reason = "fell" end
+			return compoundDistanceTraveled, currentFrame, 0, reason
 		end
 
 		-- Did we win? (set in getPositions)
 		if wonLevel then
 			wonLevel = false
-			return 10000 - timeFitnessPenalty
+			return compoundDistanceTraveled, currentFrame, 1, "victory"
 		end
 
 		-- Did we time out?
@@ -326,7 +326,7 @@ function playGame(stateName, network)
 		local timeoutBonus = currentFrame / 4
 		if timeout + timeoutBonus <= 0 or fitness < -100 then
 			compoundDistanceTraveled = 0
-			return distanceFitness - timeFitnessPenalty
+			return compoundDistanceTraveled, currentFrame, 0, "timedOut"
 		end
 		
 		-- Advance frame since we didn't win / die
@@ -341,7 +341,6 @@ function loadNetwork(filename)
 	file:close()
 	return network
 end
-
 
 -- Play demo mode if set (see top of file)
 if DEMO_FILE then
@@ -377,21 +376,12 @@ while true do
 	-- connect to server
 	local client, err = socket.connect(SERVER_IP, 56506)
 	if not err then
-		--print("connecting to: " .. client:getpeername())
 		client:settimeout(1)
 
-		--print("Sending request...")
 		bytes, err = client:send("request!" .. config.clientId .. "\n")
-		if not err then
-			--print("Bytes: " .. bytes)
-		else
-			--print("Request error: " .. err)
-		end
 
-		--print("Waiting for response...")
 		response, err2 = client:receive()
 		if not err2 then
-			--print("Response: " .. response)
 			-- Close the client and play
 			client:close()
 
@@ -405,21 +395,22 @@ while true do
 			percentage = toks[7]
 			ok, network = serpent.load(toks[8])
 
-			-- TODO: validate inputs before using them!!
-			if not toks and stateId and ok and network then
-				-- TODO bail out
-			end
-
-			fitness = playGame(stateId .. ".State", network)
-			print("level: " .. stateId .. " fitness: " .. fitness)
+			dist, frames, wonLevel, reason = playGame(stateId .. ".State", network)
+			print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames)
 
 			-- Send it back yo
 			local client2, err2 = socket.connect(SERVER_IP, 56506)
 			if not err2 then
-				client2:send("results!" .. stateId .. "!" .. iterationId .. "!" .. fitness .. "!" .. VERSION_CODE .. "!" .. config.clientId .. "\n")
+				client2:send("results!" .. stateId .. "!"
+					.. iterationId .. "!" 
+				    .. dist .. "!"
+				    .. frames .. "!"
+				    .. wonLevel .. "!"
+				    .. reason .. "!"
+				    .. VERSION_CODE .. "!"
+				    .. config.clientId .. "\n")
 				client2:close()
 			end
-
 		else
 			print("Response error: " .. err2)
 		end
