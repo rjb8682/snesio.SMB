@@ -34,7 +34,7 @@ if config.runLocal ~= "false" then
 end
 
 -- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
---DEMO_FILE = "53550.ai"
+--DEMO_FILE = "backup_network.fitness17920.3.gen1.genome7.species68.NEW_BEST"
 
 -- random state (need to prune)
 
@@ -280,9 +280,9 @@ function evaluateCurrent(network)
 	joypad.set(controller)
 end
 
-function playGame(stateName, network)
+function playGame(stateIndex, network)
 	local currentFrame = 0
-	savestate.load(stateName)
+	savestate.load(stateIndex)
 	local timeout = TimeoutConstant
 	local rightmost = 0
 
@@ -317,13 +317,13 @@ function playGame(stateName, network)
 			console.writeline("Player Died")
 			local reason = "enemyDeath"
 			if verticalScreenPosition > 1 then reason = "fell" end
-			return compoundDistanceTraveled, currentFrame, 0, reason
+			return compoundDistanceTraveled, currentFrame, 0, reason, stateIndex
 		end
 
 		-- Did we win? (set in getPositions)
 		if wonLevel then
 			wonLevel = false
-			return compoundDistanceTraveled, currentFrame, 1, "victory"
+			return compoundDistanceTraveled, currentFrame, 1, "victory", stateIndex
 		end
 
 		-- Did we time out?
@@ -331,7 +331,7 @@ function playGame(stateName, network)
 		local timeoutBonus = currentFrame / 4
 		if timeout + timeoutBonus <= 0 or fitness < -100 then
 			compoundDistanceTraveled = 0
-			return compoundDistanceTraveled, currentFrame, 0, "timedOut"
+			return compoundDistanceTraveled, currentFrame, 0, "timedOut", stateIndex
 		end
 		
 		-- Advance frame since we didn't win / die
@@ -347,6 +347,28 @@ function loadNetwork(filename)
 	return network
 end
 
+------------------------ DEMO CODE ONLY -------------------------------------
+WorldAugmenter = 0.2
+LevelAugmenter = 0.1
+function getWorldAndLevel(i)
+	local world = math.floor((i - 1) / 4) + 1
+	local level = ((i - 1) % 4) + 1
+	return world, level
+end
+
+function calculateDemoFitness(distance, frames, wonLevel, reason, stateIndex)
+	local result = distance
+	timePenalty = frames / 10
+	if wonLevel == 1 then
+		result = result + 5000
+	end
+
+	local world, level = getWorldAndLevel(stateIndex)
+	local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
+
+	return 100 + (multi * result) - timePenalty
+end
+
 -- Play demo mode if set (see top of file)
 if DEMO_FILE then
 	local demoNetwork = loadNetwork(DEMO_FILE)
@@ -359,7 +381,7 @@ if DEMO_FILE then
 	while true do
 		-- Avoid castles and water levels
 		if z % 4 ~= 0 and z ~= 6 and z ~= 26 then
-			maxFitness = maxFitness + playGame(z .. ".State", demoNetwork)
+			maxFitness = maxFitness + calculateDemoFitness(playGame(z, demoNetwork))
 		end
 
 		z = z + 1
@@ -370,6 +392,8 @@ if DEMO_FILE then
 		end
 	end
 end
+-------------------- END DEMO CODE ONLY -------------------------------------
+
 
 
 -- loop forever waiting for games to play
