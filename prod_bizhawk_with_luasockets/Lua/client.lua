@@ -7,7 +7,7 @@ local VERSION_CODE = 2
 
 function initConfigFile()
 	-- Set default config file state here
-	config = {clientId = "default_client", runLocal = false}
+	config = {clientId = "default_client", runLocal = false, demoFile=""}
 	local file = io.open("config.txt", "w")
 	file:write(serpent.dump(config))
 	file:close()
@@ -28,7 +28,7 @@ function loadConfigFile()
 end
 loadConfigFile()
 
-if config.runLocal ~= "false" then
+if config.runLocal == true then
 	print("Running locally")
 	SERVER_IP = "127.0.0.1"
 end
@@ -282,7 +282,7 @@ end
 
 function playGame(stateIndex, network)
 	local currentFrame = 0
-	savestate.load(stateIndex)
+	savestate.load(stateIndex .. ".State")
 	local timeout = TimeoutConstant
 	local rightmost = 0
 
@@ -370,12 +370,12 @@ function calculateDemoFitness(distance, frames, wonLevel, reason, stateIndex)
 end
 
 -- Play demo mode if set (see top of file)
-if DEMO_FILE then
-	local demoNetwork = loadNetwork(DEMO_FILE)
+if config.demoFile and config.demoFile ~= "" then
+	local demoNetwork = loadNetwork(config.demoFile)
 	percentage = "666" -- I hate globals...
-	currentGenome = DEMO_FILE
-	currentSpecies = DEMO_FILE
-	generation = DEMO_FILE
+	currentGenome = config.demoFile
+	currentSpecies = config.demoFile
+	generation = config.demoFile
 	maxFitness = 0
 	z = 1
 	while true do
@@ -424,7 +424,7 @@ while true do
 			percentage = toks[7]
 			ok, network = serpent.load(toks[8])
 
-			local dist, frames, wonLevel, reason = playGame(stateId .. ".State", network)
+			local dist, frames, wonLevel, reason = playGame(stateId, network)
 			print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason)
 
 			-- Send it back yo
