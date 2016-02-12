@@ -1028,11 +1028,11 @@ end
 
 function calculateFitness(distance, frames, wonLevel, reason)
 	local result = distance
-	timePenalty = frames / 4
+	timePenalty = frames / 10
 	if wonLevel then
 		result = result + 5000
 	end
-	return result
+	return result - timePenalty
 end
 
 -- loop forever waiting for clients
