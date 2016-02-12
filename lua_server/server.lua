@@ -88,9 +88,7 @@ function sumFitness()
 	local result = 0
 	for i = 1, #levels do
 		if levels[i].active then
-			local world, level = getWorldAndLevel(i)
-			local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
-			result = result + (levels[i].fitness*multi)
+			result = result + levels[i].fitness
 		end
 	end
 	return result
@@ -1026,13 +1024,17 @@ function printBoard()
 	print(printString)
 end
 
-function calculateFitness(distance, frames, wonLevel, reason)
+function calculateFitness(distance, frames, wonLevel, reason, stateIndex)
 	local result = distance
-	timePenalty = frames / 4
+	timePenalty = frames / 10
 	if wonLevel then
 		result = result + 5000
 	end
-	return result + 100
+
+	local world, level = getWorldAndLevel(stateIndex)
+	local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
+
+	return 100 + multi * (result - timePenalty)
 end
 
 -- loop forever waiting for clients
@@ -1111,7 +1113,7 @@ function getFitness(species, genome)
 				versionCode = tonumber(toks[8])
 				clientId = toks[9]
 
-				fitnessResult = calculateFitness(distance, frames, wonLevel, reason)
+				fitnessResult = calculateFitness(distance, frames, wonLevel, reason, stateIndex)
 
 				-- Only use fresh results from new clients
 				if iterationId == iteration and versionCode == VERSION_CODE then

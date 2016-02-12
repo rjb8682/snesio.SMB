@@ -28,7 +28,8 @@ function loadConfigFile()
 end
 loadConfigFile()
 
-if config.runLocal then
+if config.runLocal ~= "false" then
+	print("Running locally")
 	SERVER_IP = "127.0.0.1"
 end
 
