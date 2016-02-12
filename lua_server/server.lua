@@ -1032,7 +1032,7 @@ function calculateFitness(distance, frames, wonLevel, reason)
 	if wonLevel then
 		result = result + 5000
 	end
-	return result
+	return result + 100
 end
 
 -- loop forever waiting for clients
