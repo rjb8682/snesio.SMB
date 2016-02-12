@@ -7,7 +7,7 @@ local VERSION_CODE = 2
 
 function initConfigFile()
 	-- Set default config file state here
-	config = {clientId = "default_client"}
+	config = {clientId = "default_client", runLocal = false}
 	local file = io.open("config.txt", "w")
 	file:write(serpent.dump(config))
 	file:close()
@@ -27,6 +27,10 @@ function loadConfigFile()
 	end
 end
 loadConfigFile()
+
+if config.runLocal then
+	SERVER_IP = "127.0.0.1"
+end
 
 -- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
 --DEMO_FILE = "53550.ai"
