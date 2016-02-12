@@ -72,6 +72,7 @@ function clearLevels()
 	for i = 1, #levels, 1 do
 		levels[i].fitness = nil
 		levels[i].lastRequester = ""
+		levels[i].reason = ""
 	end
 	levelIndex = 1
 	iteration = iteration + 1
@@ -1000,22 +1001,22 @@ function printBoard()
 	printString = printString .. string.format("###################    Max Fitness: %6d    ########################\n", math.floor(pool.maxFitness))
 	printString = printString .. "######################################################################\n"
 
-	printString = printString .. string.format("| lvl | client             |----| fitness       |\n", i)
+	printString = printString .. string.format("| lvl | client        | reason     | fitness       |\n", i)
 	for i=1, #levels do
 		local world, level = getWorldAndLevel(i)
 		if levels[i].active then
 			if levels[i].fitness then
-				printString = printString .. string.format("| %1d-%1d | %18s |\t|    %10.2f |\n", world, level, levels[i].lastRequester, levels[i].fitness)
+				printString = printString .. string.format("| %1d-%1d | %13s | %10s |    %10.2f |\n", world, level, levels[i].lastRequester, levels[i].reason, levels[i].fitness)
 			else
-				printString = printString .. string.format("| %1d-%1d | %18s |\t|               |\n", world, level, levels[i].lastRequester)
+				printString = printString .. string.format("| %1d-%1d | %13s |            |               |\n", world, level, levels[i].lastRequester)
 			end
 		else
 			local fill = "-------------------------------------------------------"
 			if levels[i].kind == "water" then
-				fill = "            Oo~Oo~Oo~Oo~Oo~Oo~           "
+				fill = "            Oo~Oo~Oo~Oo~Oo~Oo~              "
 			else
 				if levels[i].kind == "castle" then
-					fill = "_____________[^]__[^_^]__[^]_____________"
+					fill = "______________[^]__[^__^]__[^]______________"
 				end
 			end
 			printString = printString .. string.format("| %1d-%1d |%30s|\n", world, level, fill)
@@ -1034,7 +1035,7 @@ function calculateFitness(distance, frames, wonLevel, reason, stateIndex)
 	local world, level = getWorldAndLevel(stateIndex)
 	local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
 
-	return 100 + multi * (result - timePenalty)
+	return 100 + (multi * result) - timePenalty
 end
 
 -- loop forever waiting for clients
@@ -1109,7 +1110,7 @@ function getFitness(species, genome)
 				distance = tonumber(toks[4])
 				frames = tonumber(toks[5])
 				wonLevel = tonumber(toks[6]) == "1"
-				reason = tonumber(toks[7])
+				reason = toks[7]
 				versionCode = tonumber(toks[8])
 				clientId = toks[9]
 
@@ -1119,6 +1120,7 @@ function getFitness(species, genome)
 				if iterationId == iteration and versionCode == VERSION_CODE then
 					levels[stateIndex].fitness = fitnessResult
 					levels[stateIndex].lastRequester = clientId
+					levels[stateIndex].reason = reason
 				end
 			end
 
