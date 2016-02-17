@@ -984,9 +984,18 @@ printf = function(s,...)
            return io.write(s:format(...))
          end -- function
 
+---- Set up curses
+local curses = require("curses")
+curses.initscr()
+curses.cbreak()
+curses.echo(false)
+curses.nl(false)
+local stdscr = curses.stdscr()
+stdscr:clear()
+-----------------
+
 lastSumFitness = 0
 function printBoard()
-	os.execute("clear")
 	-- Print previous results
 	local printString = ""--\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
 	printString = printString .. "######################################################################\n"
@@ -1018,7 +1027,8 @@ function printBoard()
 			printString = printString .. string.format("| %1d-%1d |%30s|\n", world, level, fill)
 		end
 	end
-	print(printString)
+	stdscr:mvaddstr(0, 0, printString)
+	stdscr:refresh()
 end
 
 function calculateFitness(distance, frames, wonLevel, reason, stateIndex)
