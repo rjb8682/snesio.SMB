@@ -460,5 +460,5 @@ while true do
 	-- done with client, close the object
 	if client then client:close() end
 	if client2 then client2:close() end
-	-- TODO necessary? collectgarbage()
+	collectgarbage()
 end
