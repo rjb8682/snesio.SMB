@@ -414,7 +414,7 @@ while true do
 	-- connect to server
 	local client, err = socket.connect(SERVER_IP, 56506)
 	if not err then
-		client:settimeout(1)
+		client:settimeout(10000)
 
 		bytes, err = client:send("request!" .. config.clientId .. "\n")
 
