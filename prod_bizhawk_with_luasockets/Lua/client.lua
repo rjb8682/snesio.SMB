@@ -367,7 +367,7 @@ end
 
 function calculateDemoFitness(distance, frames, wonLevel, reason, stateIndex)
 	local result = distance
-	timePenalty = frames / 10
+	local timePenalty = frames / 10
 	if wonLevel == 1 then
 		result = result + 5000
 	end
@@ -437,27 +437,28 @@ while true do
 			print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason)
 
 			-- Send it back yo
-			local client2, err2 = socket.connect(SERVER_IP, 56506)
-			if not err2 then
-				client2:send("results!" .. stateId .. "!"
+			local results_to_send = "results!" .. stateId .. "!"
 					.. iterationId .. "!" 
 				    .. dist .. "!"
 				    .. frames .. "!"
 				    .. wonLevel .. "!"
 				    .. reason .. "!"
 				    .. VERSION_CODE .. "!"
-				    .. config.clientId .. "\n")
+				    .. config.clientId .. "\n"
+			local client2, err2 = socket.connect(SERVER_IP, 56506)
+			if not err2 then
+				client2:send(results_to_send)
 				client2:close()
 			end
 		else
-			print("Response error: " .. err2)
+			print("Response err2: " .. err2)
 		end
 	else
-		print(err)
+		print("Response err: " .. err)
 	end
 
 	-- done with client, close the object
 	if client then client:close() end
 	if client2 then client2:close() end
-	collectgarbage()
+	-- TODO necessary? collectgarbage()
 end

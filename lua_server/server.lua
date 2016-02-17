@@ -1023,8 +1023,8 @@ end
 
 function calculateFitness(distance, frames, wonLevel, reason, stateIndex)
 	local result = distance
-	timePenalty = frames / 10
-	if wonLevel then
+	local timePenalty = frames / 10
+	if wonLevel == 1 then
 		result = result + 5000
 	end
 
@@ -1105,7 +1105,7 @@ function getFitness(species, genome)
 				iterationId = tonumber(toks[3])
 				distance = tonumber(toks[4])
 				frames = tonumber(toks[5])
-				wonLevel = tonumber(toks[6]) == "1"
+				wonLevel = tonumber(toks[6])
 				reason = toks[7]
 				versionCode = tonumber(toks[8])
 				clientId = toks[9]
