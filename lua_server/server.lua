@@ -986,10 +986,7 @@ printf = function(s,...)
 
 lastSumFitness = 0
 function printBoard()
-
-	-- TODO: PRINT THE REASON FOR SUCCESS/DEATH!!!
-
-	os.execute("cls")
+	os.execute("clear")
 	-- Print previous results
 	local printString = ""--\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
 	printString = printString .. "######################################################################\n"
@@ -1061,7 +1058,7 @@ function getFitness(species, genome)
 		-- Not done. Wait for a connection from any client
 		local client = server:accept()
 		-- Make sure we don't block waiting for this client's line
-		client:settimeout(1000000)
+		client:settimeout(100)
 		-- Receive the line
 		local line, err = client:receive()
 
