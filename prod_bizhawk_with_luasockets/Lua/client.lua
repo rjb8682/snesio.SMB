@@ -7,7 +7,12 @@ local VERSION_CODE = 2
 
 function initConfigFile()
 	-- Set default config file state here
-	config = {clientId = "default_client", runLocal = false, server=SERVER_IP, demoFile=""}
+	config = {
+		clientId = "default_client",
+		runLocal = false,
+		server = SERVER_IP,
+		demoFile = ""
+	}
 	local file = io.open("config.txt", "w")
 	file:write(serpent.dump(config))
 	file:close()
