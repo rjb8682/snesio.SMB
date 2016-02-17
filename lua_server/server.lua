@@ -1058,7 +1058,7 @@ function getFitness(species, genome)
 		-- Not done. Wait for a connection from any client
 		local client = server:accept()
 		-- Make sure we don't block waiting for this client's line
-		client:settimeout(100)
+		client:settimeout(10000)
 		-- Receive the line
 		local line, err = client:receive()
 
