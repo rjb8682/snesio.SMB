@@ -1,6 +1,6 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local SERVER_IP = "129.21.252.86"
+local SERVER_IP = "129.21.64.237"
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
 local VERSION_CODE = 2

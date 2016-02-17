@@ -1,1 +1,1 @@
-lua5.1.exe server.lua %*
+lua5.1.exe windows_server.lua %*
