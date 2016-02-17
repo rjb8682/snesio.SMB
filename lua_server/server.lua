@@ -4,6 +4,7 @@ local server = assert(socket.bind("*", 56506))
 -- find out which port the OS chose for us
 local ip, port = server:getsockname()
 print(ip .. ":" .. port)
+--test
 
 -- The number of genomes we've run through (times all levels have been played)
 iteration = 0
