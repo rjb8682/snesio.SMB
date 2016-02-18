@@ -3,7 +3,7 @@ local socket = require("socket")
 local SERVER_IP = "129.21.64.237"
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 2
+local VERSION_CODE = 3
 
 function initConfigFile()
 	-- Set default config file state here
@@ -78,7 +78,8 @@ StepSize = 0.1
 DisableMutationChance = 0.4
 EnableMutationChance = 0.2
 
-TimeoutConstant = 20
+ProgressTimeoutConstant = 420	-- 7 seconds
+FreezeTimeoutConstant   = 60	-- 1 second
 
 MaxNodes = 1000000
 
@@ -100,6 +101,8 @@ end
 
 function getPositions()
 	if gameinfo.getromname() == "Super Mario Bros." then
+		oldMarioX = marioX
+		oldMarioY = marioY
 		marioX = memory.readbyte(0x6D) * 0x100 + memory.readbyte(0x86)
 		marioY = memory.readbyte(0x03B8)+16
 
@@ -288,7 +291,8 @@ end
 function playGame(stateIndex, network)
 	local currentFrame = 0
 	savestate.load(stateIndex .. ".State")
-	local timeout = TimeoutConstant
+	local progressTimeout = ProgressTimeoutConstant
+	local freezeTimeout = FreezeTimeoutConstant
 	local rightmost = 0
 
 	-- Play until we die / win
@@ -304,7 +308,11 @@ function playGame(stateIndex, network)
 		if marioX > rightmost then
 			rightmost = marioX
 			compoundDistanceTraveled = rightmost
-			timeout = TimeoutConstant
+			progressTimeout = ProgressTimeoutConstant
+		end
+
+		if oldMarioX ~= marioX or oldMarioY ~= marioY then
+			freezeTimeout = FreezeTimeoutConstant
 		end
 
 		fitness = compoundDistanceTraveled - (currentFrame / 4)
@@ -333,12 +341,18 @@ function playGame(stateIndex, network)
 			return compoundDistanceTraveled, currentFrame, 1, "victory", stateIndex
 		end
 
-		-- Did we time out?
-		timeout = timeout - 1
-		local timeoutBonus = currentFrame / 4
-		if timeout + timeoutBonus <= 0 or fitness < -100 then
+		-- Check for freeze timeout
+		freezeTimeout = freezeTimeout - 1
+		if freezeTimeout <= 0 or fitness < -100 then
 			compoundDistanceTraveled = 0
-			return compoundDistanceTraveled, currentFrame, 0, "timedOut", stateIndex
+			return compoundDistanceTraveled, currentFrame, 0, "freeze", stateIndex
+		end
+
+		-- Check for progress timeout
+		progressTimeout = progressTimeout - 1
+		if progressTimeout <= 0 or fitness < -100 then
+			compoundDistanceTraveled = 0
+			return compoundDistanceTraveled, currentFrame, 0, "noProgress", stateIndex
 		end
 		
 		-- Advance frame since we didn't win / die
