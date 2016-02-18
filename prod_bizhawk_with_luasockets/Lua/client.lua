@@ -3,15 +3,15 @@ local socket = require("socket")
 local SERVER_IP = "129.21.64.237"
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 2
+local VERSION_CODE = 3
 
 function initConfigFile()
 	-- Set default config file state here
 	config = {
 		clientId = "default_client",
-		runLocal = false,
 		server = SERVER_IP,
-		demoFile = ""
+		demoFile = "",
+		drawGui = true
 	}
 	local file = io.open("config.txt", "w")
 	file:write(serpent.dump(config))
@@ -36,10 +36,6 @@ loadConfigFile()
 if config.server then
 	print("Using " .. config.server)
 	SERVER_IP = config.server
-end
-if config.runLocal == true then
-	print("Running locally")
-	SERVER_IP = "127.0.0.1"
 end
 
 -- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
@@ -82,7 +78,8 @@ StepSize = 0.1
 DisableMutationChance = 0.4
 EnableMutationChance = 0.2
 
-TimeoutConstant = 20
+ProgressTimeoutConstant = 420	-- 7 seconds
+FreezeTimeoutConstant   = 60	-- 1 second
 
 MaxNodes = 1000000
 
@@ -104,6 +101,8 @@ end
 
 function getPositions()
 	if gameinfo.getromname() == "Super Mario Bros." then
+		oldMarioX = marioX
+		oldMarioY = marioY
 		marioX = memory.readbyte(0x6D) * 0x100 + memory.readbyte(0x86)
 		marioY = memory.readbyte(0x03B8)+16
 
@@ -292,7 +291,8 @@ end
 function playGame(stateIndex, network)
 	local currentFrame = 0
 	savestate.load(stateIndex .. ".State")
-	local timeout = TimeoutConstant
+	local progressTimeout = ProgressTimeoutConstant
+	local freezeTimeout = FreezeTimeoutConstant
 	local rightmost = 0
 
 	-- Play until we die / win
@@ -308,18 +308,24 @@ function playGame(stateIndex, network)
 		if marioX > rightmost then
 			rightmost = marioX
 			compoundDistanceTraveled = rightmost
-			timeout = TimeoutConstant
+			progressTimeout = ProgressTimeoutConstant
+		end
+
+		if oldMarioX ~= marioX or oldMarioY ~= marioY then
+			freezeTimeout = FreezeTimeoutConstant
 		end
 
 		fitness = compoundDistanceTraveled - (currentFrame / 4)
 
-		gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
-		gui.drawText(0, 10, "Gen " .. generation
-							.. " Species " .. currentSpecies
-							.. " Genome " .. currentGenome
-							.. " " .. percentage, 0xFF000000, 11)
-		gui.drawText(0, 22, "Fitness: " .. math.floor(fitness), 0xFF000000, 11)
-		gui.drawText(120, 22, "Total Max: " .. maxFitness, 0xFF000000, 11)
+		if config.drawGui == true then
+			gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
+			gui.drawText(0, 10, "Gen " .. generation
+								.. " Species " .. currentSpecies
+								.. " Genome " .. currentGenome
+								.. " " .. percentage, 0xFF000000, 11)
+			gui.drawText(0, 22, "Fitness: " .. math.floor(fitness), 0xFF000000, 11)
+			gui.drawText(120, 22, "Total Max: " .. maxFitness, 0xFF000000, 11)
+		end
 
 		-- Check for death
 		if playerState == 6 or playerState == 0x0B or verticalScreenPosition > 1 then
@@ -335,12 +341,18 @@ function playGame(stateIndex, network)
 			return compoundDistanceTraveled, currentFrame, 1, "victory", stateIndex
 		end
 
-		-- Did we time out?
-		timeout = timeout - 1
-		local timeoutBonus = currentFrame / 4
-		if timeout + timeoutBonus <= 0 or fitness < -100 then
+		-- Check for freeze timeout
+		freezeTimeout = freezeTimeout - 1
+		if freezeTimeout <= 0 or fitness < -100 then
 			compoundDistanceTraveled = 0
-			return compoundDistanceTraveled, currentFrame, 0, "timedOut", stateIndex
+			return compoundDistanceTraveled, currentFrame, 0, "freeze", stateIndex
+		end
+
+		-- Check for progress timeout
+		progressTimeout = progressTimeout - 1
+		if progressTimeout <= 0 or fitness < -100 then
+			compoundDistanceTraveled = 0
+			return compoundDistanceTraveled, currentFrame, 0, "noProgress", stateIndex
 		end
 		
 		-- Advance frame since we didn't win / die
@@ -460,5 +472,5 @@ while true do
 	-- done with client, close the object
 	if client then client:close() end
 	if client2 then client2:close() end
-	-- TODO necessary? collectgarbage()
+	collectgarbage()
 end
