@@ -10,7 +10,7 @@ print(ip .. ":" .. port)
 iteration = 0
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 2
+local VERSION_CODE = 3
 
 levels = {
 	{fitness = nil, active = true, kind = "land"},  -- 1-1
@@ -998,13 +998,13 @@ lastSumFitness = 0
 function printBoard()
 	-- Print previous results
 	local printString = ""--\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-	printString = printString .. "######################################################################\n"
-	printString = printString .. string.format("########   Gen %3d species %3d genome %3d fitness: %6d   ##########\n", pool.generation,
-																													pool.currentSpecies,
-																													pool.currentGenome,
-																													math.floor(lastSumFitness))
-	printString = printString .. string.format("###################    Max Fitness: %6d    ########################\n", math.floor(pool.maxFitness))
-	printString = printString .. "######################################################################\n"
+	printString = printString .. "####################################################\n"
+	printString = printString .. string.format("#  gen %3d species %3d genome %3d fitness: %6d  #\n",   pool.generation,
+																					    				pool.currentSpecies,
+																										pool.currentGenome,
+																										math.floor(lastSumFitness))
+	printString = printString .. string.format("#               max fitness: %6d                #\n", math.floor(pool.maxFitness))
+	printString = printString .. "####################################################\n"
 
 	printString = printString .. string.format("| lvl | client        | reason     | fitness       |\n", i)
 	for i=1, #levels do
