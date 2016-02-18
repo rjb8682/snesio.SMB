@@ -9,9 +9,9 @@ function initConfigFile()
 	-- Set default config file state here
 	config = {
 		clientId = "default_client",
-		runLocal = false,
 		server = SERVER_IP,
-		demoFile = ""
+		demoFile = "",
+		drawGui = true
 	}
 	local file = io.open("config.txt", "w")
 	file:write(serpent.dump(config))
@@ -36,10 +36,6 @@ loadConfigFile()
 if config.server then
 	print("Using " .. config.server)
 	SERVER_IP = config.server
-end
-if config.runLocal == true then
-	print("Running locally")
-	SERVER_IP = "127.0.0.1"
 end
 
 -- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
@@ -313,13 +309,15 @@ function playGame(stateIndex, network)
 
 		fitness = compoundDistanceTraveled - (currentFrame / 4)
 
-		gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
-		gui.drawText(0, 10, "Gen " .. generation
-							.. " Species " .. currentSpecies
-							.. " Genome " .. currentGenome
-							.. " " .. percentage, 0xFF000000, 11)
-		gui.drawText(0, 22, "Fitness: " .. math.floor(fitness), 0xFF000000, 11)
-		gui.drawText(120, 22, "Total Max: " .. maxFitness, 0xFF000000, 11)
+		if config.drawGui == true then
+			gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
+			gui.drawText(0, 10, "Gen " .. generation
+								.. " Species " .. currentSpecies
+								.. " Genome " .. currentGenome
+								.. " " .. percentage, 0xFF000000, 11)
+			gui.drawText(0, 22, "Fitness: " .. math.floor(fitness), 0xFF000000, 11)
+			gui.drawText(120, 22, "Total Max: " .. maxFitness, 0xFF000000, 11)
+		end
 
 		-- Check for death
 		if playerState == 6 or playerState == 0x0B or verticalScreenPosition > 1 then
