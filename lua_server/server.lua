@@ -1,6 +1,6 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local server = assert(socket.bind("*", 56506))
+local server = assert(socket.bind("*", 56507))
 -- find out which port the OS chose for us
 local ip, port = server:getsockname()
 print(ip .. ":" .. port)
@@ -12,39 +12,42 @@ iteration = 0
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
 local VERSION_CODE = 3
 
+-- New field: totalFrames. TODO: consider using average frames over the last 100
+-- iterations for example. May not be worth the extra work, honestly. Even easier
+-- is resetting totalFrames every so often for a similar effect.
 levels = {
-	{fitness = nil, active = true, kind = "land"},  -- 1-1
-	{fitness = nil, active = true, kind = "land"},  -- 1-2
-	{fitness = nil, active = true, kind = "land"},  -- 1-3
-	{fitness = nil, active = false, kind = "castle"}, -- 1-4, castle
-	{fitness = nil, active = true, kind = "land"},  -- 2-1
-	{fitness = nil, active = false, kind = "water"}, -- 2-2, water level
-	{fitness = nil, active = true, kind = "land"},  -- 2-3
-	{fitness = nil, active = false, kind = "castle"}, -- 2-4, castle
-	{fitness = nil, active = true, kind = "land"},  -- 3-1
-	{fitness = nil, active = true, kind = "land"},  -- 3-2
-	{fitness = nil, active = true, kind = "land"},  -- 3-3
-	{fitness = nil, active = false, kind = "castle"}, -- 3-4, castle
-	{fitness = nil, active = true, kind = "land"},  -- 4-1
-	{fitness = nil, active = true, kind = "land"},  -- 4-2
-	{fitness = nil, active = true, kind = "land"},  -- 4-3
-	{fitness = nil, active = false, kind = "castle"}, -- 4-4, castle
-	{fitness = nil, active = true, kind = "land"},  -- 5-1
-	{fitness = nil, active = true, kind = "land"},  -- 5-2,
-	{fitness = nil, active = true, kind = "land"},  -- 5-3
-	{fitness = nil, active = false, kind = "castle"}, -- 5-4, castle
-	{fitness = nil, active = true, kind = "land"},  -- 6-1
-	{fitness = nil, active = true, kind = "land"},  -- 6-2
-	{fitness = nil, active = true, kind = "land"},  -- 6-3
-	{fitness = nil, active = false, kind = "castle"}, -- 6-4, castle
-	{fitness = nil, active = true, kind = "land"},  -- 7-1
-	{fitness = nil, active = false, kind = "water"}, -- 7-2, water level
-	{fitness = nil, active = true, kind = "land"},  -- 7-3
-	{fitness = nil, active = false, kind = "castle"}, -- 7-4, castle
-	{fitness = nil, active = true, kind = "land"},  -- 8-1
-	{fitness = nil, active = true, kind = "land"},  -- 8-2
-	{fitness = nil, active = true, kind = "land"},  -- 8-3
-	{fitness = nil, active = false, kind = "castle"}  -- 8-4, castle
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 1-1
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 1-2
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 1-3
+	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 1-4, castle
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 2-1
+	{fitness = nil, totalFrames = 0, active = false, kind = "water"}, -- 2-2, water level
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 2-3
+	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 2-4, castle
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 3-1
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 3-2
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 3-3
+	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 3-4, castle
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 4-1
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 4-2
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 4-3
+	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 4-4, castle
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 5-1
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 5-2,
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 5-3
+	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 5-4, castle
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 6-1
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 6-2
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 6-3
+	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 6-4, castle
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 7-1
+	{fitness = nil, totalFrames = 0, active = false, kind = "water"}, -- 7-2, water level
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 7-3
+	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 7-4, castle
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 8-1
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 8-2
+	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 8-3
+	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}  -- 8-4, castle
 }
 
 levelIndex = 1
@@ -54,11 +57,12 @@ function nextUnfinishedLevel()
 	--print("levelIndex: " .. levelIndex)
 
 	for _ = 1, #levels do
-		--print(i)
+		-- Modify the order based on how long each level is
+		level = orderedLevels[i].index
 
-		if levels[i].active and levels[i].fitness == nil then
+		if levels[level].active and levels[level].fitness == nil then
 			levelIndex = (i % #levels) + 1
-			return i--levels[i].state
+			return level
 		end
 
 		i = (i % #levels) + 1
@@ -781,7 +785,7 @@ function newGeneration()
 	
 	pool.generation = pool.generation + 1
 	
-	print("writing backup file in newGeneration")
+	--print("writing backup file in newGeneration")
 	writeFile("backup." .. pool.generation .. "." .. "NEW_GENERATION")
 end
 	
@@ -1019,7 +1023,7 @@ function printBoard()
 				if levels[i].reason == "enemyDeath" then
 					stdscr:attron(curses.color_pair(2))
 				end
-				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f |\n", world, level, levels[i].lastRequester, levels[i].reason, levels[i].fitness))
+				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f | %10d\n", world, level, levels[i].lastRequester, levels[i].reason, levels[i].fitness, levels[i].totalFrames))
 
 				stdscr:attroff(curses.color_pair(1))
 				stdscr:attroff(curses.color_pair(2))
@@ -1040,6 +1044,16 @@ function printBoard()
 		end
 	end
 	stdscr:refresh()
+end
+
+-- Returns an ordering through a table based on the totalFrames field
+function genOrderedIndex( t )
+    local orderedIndex = {}
+    for key, value in pairs(t) do
+        table.insert( orderedIndex, {index=key, t=value})
+    end
+    table.sort( orderedIndex, function(a, b) return a.t.totalFrames > b.t.totalFrames end)
+    return orderedIndex
 end
 
 function calculateFitness(distance, frames, wonLevel, reason, stateIndex)
@@ -1136,6 +1150,7 @@ function getFitness(species, genome)
 				-- Only use fresh results from new clients
 				if iterationId == iteration and versionCode == VERSION_CODE then
 					levels[stateIndex].fitness = fitnessResult
+					levels[stateIndex].totalFrames = levels[stateIndex].totalFrames + frames
 					levels[stateIndex].lastRequester = clientId
 					levels[stateIndex].reason = reason
 				end
@@ -1160,17 +1175,24 @@ end
 -- How many iterations to wait before saving a checkpoint
 SAVE_EVERY = 5
 -- How many iterations ago we last saved
-lastSaved = 0
+lastSaved = 999
 
 while true do
 
 	initializeRun()
 
+	-- Sort the levels based on the total frames spent on each level.
+	-- (long levels get played first for optimal scheduling)
+	orderedLevels = genOrderedIndex(levels)
+
 	local species = pool.species[pool.currentSpecies]
 	local genome = species.genomes[pool.currentGenome]
 
 	-- This calls the clients
+	local startTime = os.time()
 	local fitness = getFitness(species, genome)
+	local endTime = os.time()
+
 	lastSumFitness = fitness
 	genome.fitness = fitness
 	
@@ -1184,12 +1206,17 @@ while true do
 
 	-- Save a checkpoint if necessary
 	lastSaved = lastSaved + 1
+	
 	if lastSaved >= SAVE_EVERY then
 		writeFile("backup.checkpoint")
 		lastSaved = 0
-		stdscr:addstr("saved last checkpoint at " .. os.date("%c", os.time()))
-		stdscr:refresh()
+		lastCheckpoint = os.date("%c", os.time())
 	end
+
+	stdscr:addstr("took " .. (endTime - startTime) .. " seconds\n")
+	stdscr:addstr("saved last checkpoint at " .. lastCheckpoint)
+	-- Refresh to show the iteration time + our last checkpoint	
+	stdscr:refresh()
 
 	pool.currentSpecies = 1
 	pool.currentGenome = 1
