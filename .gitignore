@@ -4,4 +4,5 @@
 *.SERVER_BACKUP
 *.SERVER_BACKUP_2
 *.network
+*.checkpoint
 config.txt

@@ -1157,6 +1157,11 @@ if #arg > 0 then
 	loadFile(arg[1])
 end
 
+-- How many iterations to wait before saving a checkpoint
+SAVE_EVERY = 5
+-- How many iterations ago we last saved
+lastSaved = 0
+
 while true do
 
 	initializeRun()
@@ -1168,12 +1173,22 @@ while true do
 	local fitness = getFitness(species, genome)
 	lastSumFitness = fitness
 	genome.fitness = fitness
-		
+	
+	-- Make backups if we beat the current best	
 	if fitness > pool.maxFitness then
 		pool.maxFitness = fitness
 		--forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
 		writeFile("backup." .. pool.generation .. ".NEW_BEST")
 		writeNetwork("backup_network.fitness" .. pool.maxFitness .. ".gen" .. pool.generation .. ".genome" .. pool.currentGenome .. ".species" .. pool.currentSpecies .. ".NEW_BEST", genome.network)
+	end
+
+	-- Save a checkpoint if necessary
+	lastSaved = lastSaved + 1
+	if lastSaved >= SAVE_EVERY then
+		writeFile("backup.checkpoint")
+		lastSaved = 0
+		stdscr:addstr("saved last checkpoint at " .. os.date("%c", os.time()))
+		stdscr:refresh()
 	end
 
 	pool.currentSpecies = 1
