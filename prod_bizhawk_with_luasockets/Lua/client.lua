@@ -7,7 +7,7 @@ local VERSION_CODE = 3
 function initConfigFile()
 	-- Set default config file state here
 	config = {
-		clientId = "default_client",
+		clientId = "default_name",
 		server = "129.21.64.237",
 		port = 56506,
 		demoFile = "",
