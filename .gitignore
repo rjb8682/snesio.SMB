@@ -5,4 +5,5 @@
 *.SERVER_BACKUP_2
 *.network
 *.checkpoint
+config.ini
 config.txt
