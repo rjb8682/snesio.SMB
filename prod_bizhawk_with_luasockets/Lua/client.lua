@@ -1,7 +1,5 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local SERVER_IP = "129.21.64.237"
-local PORT = 56506
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
 local VERSION_CODE = 3
@@ -10,8 +8,8 @@ function initConfigFile()
 	-- Set default config file state here
 	config = {
 		clientId = "default_client",
-		server = SERVER_IP,
-		port = PORT,
+		server = "129.21.64.237",
+		port = 56506,
 		demoFile = "",
 		drawGui = true
 	}
@@ -35,10 +33,7 @@ function loadConfigFile()
 end
 loadConfigFile()
 
-if config.server then
-	print("Using " .. config.server .. ":" .. config.port)
-	SERVER_IP = config.server
-end
+print("Using " .. config.server .. ":" .. config.port)
 
 -- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
 --DEMO_FILE = "backup_network.fitness17920.3.gen1.genome7.species68.NEW_BEST"
@@ -426,7 +421,7 @@ while true do
 	local toks, stateId, iterationId, ok, network, fitness
 
 	-- connect to server
-	local client, err = socket.connect(SERVER_IP, PORT)
+	local client, err = socket.connect(config.server, config.port)
 	if not err then
 		client:settimeout(10000)
 
@@ -459,7 +454,7 @@ while true do
 				    .. reason .. "!"
 				    .. VERSION_CODE .. "!"
 				    .. config.clientId .. "\n"
-			local client2, err2 = socket.connect(SERVER_IP, PORT)
+			local client2, err2 = socket.connect(config.server, config.port)
 			if not err2 then
 				client2:send(results_to_send)
 				client2:close()
