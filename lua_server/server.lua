@@ -1,16 +1,26 @@
 local serpent = require("serpent")
 local socket = require("socket")
 local server = assert(socket.bind("*", 56507))
--- find out which port the OS chose for us
 local ip, port = server:getsockname()
-print(ip .. ":" .. port)
---test
+
+---- Set up curses
+local curses = require("curses")
+curses.initscr()
+curses.cbreak()
+curses.echo(false)
+curses.nl(false)
+local stdscr = curses.stdscr()
+stdscr:clear()
+curses.start_color()
+curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK);
+curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
+-----------------
 
 -- The number of genomes we've run through (times all levels have been played)
 iteration = 0
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 3
+local VERSION_CODE = 4
 
 -- New field: totalFrames. TODO: consider using average frames over the last 100
 -- iterations for example. May not be worth the extra work, honestly. Even easier
@@ -61,7 +71,7 @@ function nextUnfinishedLevel()
 		level = orderedLevels[i].index
 
 		if levels[level].active and levels[level].fitness == nil then
-			levelIndex = (i % #levels) + 1
+			levelIndex = (i % #levels)
 			return level
 		end
 
@@ -988,18 +998,6 @@ printf = function(s,...)
            return io.write(s:format(...))
          end -- function
 
----- Set up curses
-local curses = require("curses")
-curses.initscr()
-curses.cbreak()
-curses.echo(false)
-curses.nl(false)
-local stdscr = curses.stdscr()
-stdscr:clear()
-curses.start_color()
-curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK);
-curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
------------------
 
 lastSumFitness = 0
 function printBoard()
@@ -1029,7 +1027,7 @@ function printBoard()
 				stdscr:attroff(curses.color_pair(2))
 
 			else
-				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               |\n", world, level, levels[i].lastRequester))
+				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               | %10d\n", world, level, levels[i].lastRequester, levels[i].totalFrames))
 			end
 		else
 			local fill = "-------------------------------------------------------"
@@ -1053,6 +1051,12 @@ function genOrderedIndex( t )
         table.insert( orderedIndex, {index=key, t=value})
     end
     table.sort( orderedIndex, function(a, b) return a.t.totalFrames > b.t.totalFrames end)
+    --[[
+    for key,value in pairs(orderedIndex) do
+    	stdscr:addstr("[" .. key .. ":" .. value.t.totalFrames .. ":" .. value.index .. "] ")
+    end
+    stdscr:refresh()
+    ]]--
     return orderedIndex
 end
 
@@ -1092,19 +1096,13 @@ function getFitness(species, genome)
 
 		-- Not done. Wait for a connection from any client
 		local client = server:accept()
-		-- Make sure we don't block waiting for this client's line
-		--client:settimeout(10000)
 		-- Receive the line
 		local line, err = client:receive()
 
 		-- Was it good?
 		if not err then
 
-			--print("Splitting " .. line)
 			toks = mysplit(line, "!")
-			for k,v in pairs(toks) do
-				--print(k .. ": " .. v)
-			end
 
 			-- Calculating percent of generation done
 			local measured = 0
@@ -1118,24 +1116,9 @@ function getFitness(species, genome)
 				end
 			end
 
-			if toks[1] == "request" then
-				local response = nextLevel .. "!" 
-								.. iteration .. "!" 
-								.. pool.generation .. "!" 
-								.. pool.currentSpecies .. "!" 
-								.. pool.currentGenome .. "!" 
-								.. math.floor(pool.maxFitness) .. "!" 
-								.. "(" .. math.floor(measured/total*100) .. "%)!"
-								.. serpent.dump(genome.network) .. "\n"
-				--print("REQUEST: " .. nextLevel)
-				levels[nextLevel].lastRequester = toks[2]
-				client:send(response)
+			clientId = toks[1]
 
-				-- Since we got a request, advance to the next level.
-				nextLevel = nextUnfinishedLevel()
-			end
-
-			if toks[1] == "results" then
+			if #toks > 1 then
 				stateIndex = tonumber(toks[2])
 				iterationId = tonumber(toks[3])
 				distance = tonumber(toks[4])
@@ -1143,7 +1126,6 @@ function getFitness(species, genome)
 				wonLevel = tonumber(toks[6])
 				reason = toks[7]
 				versionCode = tonumber(toks[8])
-				clientId = toks[9]
 
 				fitnessResult = calculateFitness(distance, frames, wonLevel, reason, stateIndex)
 
@@ -1156,6 +1138,23 @@ function getFitness(species, genome)
 				end
 			end
 
+			-- Since we got a request, advance to the next level.
+			nextLevel = nextUnfinishedLevel()
+			if nextLevel then
+				local response = nextLevel .. "!" 
+								.. iteration .. "!" 
+								.. pool.generation .. "!" 
+								.. pool.currentSpecies .. "!" 
+								.. pool.currentGenome .. "!" 
+								.. math.floor(pool.maxFitness) .. "!" 
+								.. "(" .. math.floor(measured/total*100) .. "%)!"
+								.. serpent.dump(genome.network) .. "\n"
+				--print("REQUEST: " .. nextLevel)
+				levels[nextLevel].lastRequester = clientId
+				client:send(response)
+			else 
+				client:send("no_level")
+			end
 			printBoard()
 		else
 			print("Error: " .. err)
