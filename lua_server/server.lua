@@ -992,28 +992,40 @@ curses.echo(false)
 curses.nl(false)
 local stdscr = curses.stdscr()
 stdscr:clear()
+curses.start_color()
+curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK);
+curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
 -----------------
 
 lastSumFitness = 0
 function printBoard()
 	-- Print previous results
-	local printString = ""--\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-	printString = printString .. "####################################################\n"
-	printString = printString .. string.format("#  gen %3d species %3d genome %3d fitness: %6d  #\n",   pool.generation,
-																					    				pool.currentSpecies,
-																										pool.currentGenome,
-																										math.floor(lastSumFitness))
-	printString = printString .. string.format("#               max fitness: %6d                #\n", math.floor(pool.maxFitness))
-	printString = printString .. "####################################################\n"
+	stdscr:mvaddstr(0,0,"####################################################\n")
+	stdscr:addstr(string.format("#  gen %3d species %3d genome %3d fitness: %6d  #\n",  pool.generation,
+																					    pool.currentSpecies,
+																						pool.currentGenome,
+																						math.floor(lastSumFitness)))
+	stdscr:addstr(string.format("#               max fitness: %6d                #\n", math.floor(pool.maxFitness)))
+	stdscr:addstr("####################################################\n")
 
-	printString = printString .. string.format("| lvl | client        | reason     | fitness       |\n", i)
+	stdscr:addstr(string.format("| lvl | client        | reason     | fitness       |\n", i))
 	for i=1, #levels do
 		local world, level = getWorldAndLevel(i)
 		if levels[i].active then
 			if levels[i].fitness then
-				printString = printString .. string.format("| %1d-%1d | %13s | %10s |    %10.2f |\n", world, level, levels[i].lastRequester, levels[i].reason, levels[i].fitness)
+				if levels[i].reason == "victory" then
+					stdscr:attron(curses.color_pair(1))
+				end
+				if levels[i].reason == "enemyDeath" then
+					stdscr:attron(curses.color_pair(2))
+				end
+				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f |\n", world, level, levels[i].lastRequester, levels[i].reason, levels[i].fitness))
+
+				stdscr:attroff(curses.color_pair(1))
+				stdscr:attroff(curses.color_pair(2))
+
 			else
-				printString = printString .. string.format("| %1d-%1d | %13s |            |               |\n", world, level, levels[i].lastRequester)
+				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               |\n", world, level, levels[i].lastRequester))
 			end
 		else
 			local fill = "-------------------------------------------------------"
@@ -1024,10 +1036,9 @@ function printBoard()
 					fill = "______________[^]__[^__^]__[^]______________"
 				end
 			end
-			printString = printString .. string.format("| %1d-%1d |%30s|\n", world, level, fill)
+			stdscr:addstr(string.format("| %1d-%1d |%30s|\n", world, level, fill))
 		end
 	end
-	stdscr:mvaddstr(0, 0, printString)
 	stdscr:refresh()
 end
 
