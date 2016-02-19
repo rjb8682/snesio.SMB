@@ -2,7 +2,7 @@ local serpent = require("serpent")
 local socket = require("socket")
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 3
+local VERSION_CODE = 4
 
 function initConfigFile()
 	-- Set default config file state here
@@ -35,9 +35,6 @@ loadConfigFile()
 
 print("Using " .. config.server .. ":" .. config.port)
 
--- Uncomment this to play in demo mode! Make sure this filename exists in the same dir as the client.lua.
---DEMO_FILE = "backup_network.fitness17920.3.gen1.genome7.species68.NEW_BEST"
-
 -- random state (need to prune)
 
 Filename = "1.State"
@@ -55,8 +52,6 @@ InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 
 Inputs = InputSize + 3
 Outputs = #ButtonNames
-
-compoundDistanceTraveled = 0
 
 Population = 300
 DeltaDisjoint = 2.0
@@ -304,7 +299,6 @@ function playGame(stateIndex, network)
 		getPositions()
 		if marioX > rightmost then
 			rightmost = marioX
-			compoundDistanceTraveled = rightmost
 			progressTimeout = ProgressTimeoutConstant
 		end
 
@@ -312,7 +306,7 @@ function playGame(stateIndex, network)
 			freezeTimeout = FreezeTimeoutConstant
 		end
 
-		fitness = compoundDistanceTraveled - (currentFrame / 4)
+		fitness = rightmost - (currentFrame / 4)
 
 		if config.drawGui == true then
 			gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
@@ -329,27 +323,25 @@ function playGame(stateIndex, network)
 			console.writeline("Player Died")
 			local reason = "enemyDeath"
 			if verticalScreenPosition > 1 then reason = "fell" end
-			return compoundDistanceTraveled, currentFrame, 0, reason, stateIndex
+			return rightmost, currentFrame, 0, reason, stateIndex
 		end
 
 		-- Did we win? (set in getPositions)
 		if wonLevel then
 			wonLevel = false
-			return compoundDistanceTraveled, currentFrame, 1, "victory", stateIndex
+			return rightmost, currentFrame, 1, "victory", stateIndex
 		end
 
 		-- Check for freeze timeout
 		freezeTimeout = freezeTimeout - 1
 		if freezeTimeout <= 0 or fitness < -100 then
-			compoundDistanceTraveled = 0
-			return compoundDistanceTraveled, currentFrame, 0, "freeze", stateIndex
+			return rightmost, currentFrame, 0, "freeze", stateIndex
 		end
 
 		-- Check for progress timeout
 		progressTimeout = progressTimeout - 1
 		if progressTimeout <= 0 or fitness < -100 then
-			compoundDistanceTraveled = 0
-			return compoundDistanceTraveled, currentFrame, 0, "noProgress", stateIndex
+			return rightmost, currentFrame, 0, "noProgress", stateIndex
 		end
 		
 		-- Advance frame since we didn't win / die
@@ -420,54 +412,70 @@ while true do
 
 	local toks, stateId, iterationId, ok, network, fitness
 
-	-- connect to server
-	local client, err = socket.connect(config.server, config.port)
-	if not err then
-		client:settimeout(10000)
-
-		bytes, err = client:send("request!" .. config.clientId .. "\n")
-
-		response, err2 = client:receive()
-		if not err2 then
-			-- Close the client and play
-			client:close()
-
-			toks = mysplit(response, "!")
-			stateId = toks[1]
-			iterationId = toks[2]
-			generation = toks[3]
-			currentSpecies = toks[4]
-			currentGenome = toks[5]
-			maxFitness = toks[6]
-			percentage = toks[7]
-			ok, network = serpent.load(toks[8])
-
-			local dist, frames, wonLevel, reason = playGame(stateId, network)
-			print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason)
-
-			-- Send it back yo
-			local results_to_send = "results!" .. stateId .. "!"
-					.. iterationId .. "!" 
-				    .. dist .. "!"
-				    .. frames .. "!"
-				    .. wonLevel .. "!"
-				    .. reason .. "!"
-				    .. VERSION_CODE .. "!"
-				    .. config.clientId .. "\n"
-			local client2, err2 = socket.connect(config.server, config.port)
-			if not err2 then
-				client2:send(results_to_send)
-				client2:close()
-			end
-		else
-			print("Response err2: " .. err2)
-		end
+	-- If the server responded with the next game from the previous iteration,
+	-- then use that rather than asking for another level.
+	if nextResponseToUse then
+		print("using next level")
+		response = nextResponseToUse
+		nextResponseToUse = nil
 	else
-		print("Response err: " .. err)
+		-- Connect to server
+		local client, err = socket.connect(config.server, config.port)
+		if not err then
+			bytes, err = client:send(config.clientId .. "\n")
+			response, err2 = client:receive()
+		end
+		-- Close the client and play
+		if client then
+			client:close()
+		end
 	end
 
-	-- done with client, close the object
-	if client then client:close() end
-	if client2 then client2:close() end
+	if response then
+		toks = mysplit(response, "!")
+		response = nil -- Delete response so we don't re-play the level
+		stateId = toks[1]
+		iterationId = toks[2]
+		generation = toks[3]
+		currentSpecies = toks[4]
+		currentGenome = toks[5]
+		maxFitness = toks[6]
+		percentage = toks[7]
+		ok, network = serpent.load(toks[8])
+
+		local dist, frames, wonLevel, reason = playGame(stateId, network)
+		print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason)
+
+		-- Send it back yo
+		local results_to_send = config.clientId .. "!" .. stateId .. "!"
+				.. iterationId .. "!" 
+			    .. dist .. "!"
+			    .. frames .. "!"
+			    .. wonLevel .. "!"
+			    .. reason .. "!"
+			    .. VERSION_CODE .. "\n"
+		local client2, err2 = socket.connect(config.server, config.port)
+		if not err2 then
+			client2:send(results_to_send)
+
+			-- The server might send the next level right away
+			nextResponseToUse, err3 = client2:receive()
+			if not err3 and response ~= "no_level" then
+				print("got next level using same connection")
+			end
+		end
+		if client2 then
+			client2:close()
+		end
+	else
+		print("No response.")
+		if err then
+			print("err: " .. err)
+		end
+		if err2 then
+			print("err2: " .. err2)
+		end
+	end
+
 	collectgarbage()
 end
