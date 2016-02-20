@@ -1139,7 +1139,7 @@ function getFitness(species, genome)
 
 			clientId = toks[1]
 
-			if #toks > 1 then
+			if #toks > 2 then
 				stateIndex = tonumber(toks[2])
 				iterationId = tonumber(toks[3])
 				distance = tonumber(toks[4])
