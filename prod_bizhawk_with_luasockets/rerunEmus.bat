@@ -1,4 +1,5 @@
 @echo off
+set originalAmount=%1
 set numEmus=%1
 :loop
 :forloop
@@ -8,7 +9,8 @@ set /A numEmus=numEmus-1
 @timeout /t 1 
 goto forloop
 :end
-@timeout /t 60
+set /A numEmus=originalAmount
+@timeout /t 3600
 taskkill /f /im EmuHawk.exe
 @timeout /t 1 
 goto loop
