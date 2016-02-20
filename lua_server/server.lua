@@ -1,6 +1,6 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local server = assert(socket.bind("*", 56507))
+local server = assert(socket.bind("*", 56506))
 local ip, port = server:getsockname()
 
 ---- Set up curses
@@ -26,52 +26,49 @@ local VERSION_CODE = 4
 -- iterations for example. May not be worth the extra work, honestly. Even easier
 -- is resetting totalFrames every so often for a similar effect.
 levels = {
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 1-1
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 1-2
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 1-3
-	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 1-4, castle
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 2-1
-	{fitness = nil, totalFrames = 0, active = false, kind = "water"}, -- 2-2, water level
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 2-3
-	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 2-4, castle
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 3-1
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 3-2
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 3-3
-	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 3-4, castle
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 4-1
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 4-2
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 4-3
-	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 4-4, castle
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 5-1
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 5-2,
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 5-3
-	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 5-4, castle
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 6-1
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 6-2
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 6-3
-	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 6-4, castle
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 7-1
-	{fitness = nil, totalFrames = 0, active = false, kind = "water"}, -- 7-2, water level
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 7-3
-	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}, -- 7-4, castle
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 8-1
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 8-2
-	{fitness = nil, totalFrames = 0, active = true, kind = "land"},  -- 8-3
-	{fitness = nil, totalFrames = 0, active = false, kind = "castle"}  -- 8-4, castle
+	{active = true, kind = "land"},  -- 1-1
+	{active = true, kind = "land"},  -- 1-2
+	{active = true, kind = "land"},  -- 1-3
+	{active = false, kind = "castle"}, -- 1-4, castle
+	{active = true, kind = "land"},  -- 2-1
+	{active = false, kind = "water"}, -- 2-2, water level
+	{active = true, kind = "land"},  -- 2-3
+	{active = false, kind = "castle"}, -- 2-4, castle
+	{active = true, kind = "land"},  -- 3-1
+	{active = true, kind = "land"},  -- 3-2
+	{active = true, kind = "land"},  -- 3-3
+	{active = false, kind = "castle"}, -- 3-4, castle
+	{active = true, kind = "land"},  -- 4-1
+	{active = true, kind = "land"},  -- 4-2
+	{active = true, kind = "land"},  -- 4-3
+	{active = false, kind = "castle"}, -- 4-4, castle
+	{active = true, kind = "land"},  -- 5-1
+	{active = true, kind = "land"},  -- 5-2,
+	{active = true, kind = "land"},  -- 5-3
+	{active = false, kind = "castle"}, -- 5-4, castle
+	{active = true, kind = "land"},  -- 6-1
+	{active = true, kind = "land"},  -- 6-2
+	{active = true, kind = "land"},  -- 6-3
+	{active = false, kind = "castle"}, -- 6-4, castle
+	{active = true, kind = "land"},  -- 7-1
+	{active = false, kind = "water"}, -- 7-2, water level
+	{active = true, kind = "land"},  -- 7-3
+	{active = false, kind = "castle"}, -- 7-4, castle
+	{active = true, kind = "land"},  -- 8-1
+	{active = true, kind = "land"},  -- 8-2
+	{active = true, kind = "land"},  -- 8-3
+	{active = false, kind = "castle"}  -- 8-4, castle
 }
-
-levelIndex = 1
 
 function nextUnfinishedLevel()
 	local i = levelIndex
-	--print("levelIndex: " .. levelIndex)
 
 	for _ = 1, #levels do
 		-- Modify the order based on how long each level is
 		level = orderedLevels[i].index
 
 		if levels[level].active and levels[level].fitness == nil then
-			levelIndex = (i % #levels)
+			levelIndex = (i % #levels) + 1
 			return level
 		end
 
@@ -83,6 +80,13 @@ end
 
 function clearLevels()
 	for i = 1, #levels, 1 do
+		if not levels[i].timesWon then
+			levels[i].timesWon = 0
+		end
+
+		if not levels[i].totalFrames then
+			levels[i].totalFrames = 0
+		end
 		levels[i].fitness = nil
 		levels[i].lastRequester = ""
 		levels[i].reason = ""
@@ -991,6 +995,7 @@ end
 
 print("writing temp.pool")
 writeFile("temp.pool")
+clearLevels()
 
 -- deleted playGame
 
@@ -1000,14 +1005,16 @@ printf = function(s,...)
 
 
 lastSumFitness = 0
-function printBoard()
+function printBoard(percentage)
 	-- Print previous results
+	percentage = tostring(percentage) .. "%"
 	stdscr:mvaddstr(0,0,"####################################################\n")
-	stdscr:addstr(string.format("#  gen %3d species %3d genome %3d fitness: %6d  #\n",  pool.generation,
-																					    pool.currentSpecies,
-																						pool.currentGenome,
-																						math.floor(lastSumFitness)))
-	stdscr:addstr(string.format("#               max fitness: %6d                #\n", math.floor(pool.maxFitness)))
+	stdscr:addstr(string.format("#       gen %3d species %3d genome %3d (%3s)       #\n",   pool.generation,
+																					pool.currentSpecies,
+																					pool.currentGenome,
+																					percentage))
+	stdscr:addstr(string.format("#       fitness: %6d  max fitness: %6d       #\n", math.floor(lastSumFitness),
+																					math.floor(pool.maxFitness)))
 	stdscr:addstr("####################################################\n")
 
 	stdscr:addstr(string.format("| lvl | client        | reason     | fitness       |\n", i))
@@ -1021,13 +1028,23 @@ function printBoard()
 				if levels[i].reason == "enemyDeath" then
 					stdscr:attron(curses.color_pair(2))
 				end
-				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f | %10d\n", world, level, levels[i].lastRequester, levels[i].reason, levels[i].fitness, levels[i].totalFrames))
+				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f | %4d ~ %7d\n", world,
+																							level,
+																							levels[i].lastRequester,
+																							levels[i].reason,
+																							levels[i].fitness,
+																							levels[i].timesWon,
+																							levels[i].totalFrames))
 
 				stdscr:attroff(curses.color_pair(1))
 				stdscr:attroff(curses.color_pair(2))
 
 			else
-				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               | %10d\n", world, level, levels[i].lastRequester, levels[i].totalFrames))
+				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               | %4d ~ %7d\n", world,
+																									  level,
+																									  levels[i].lastRequester,
+																									  levels[i].timesWon,
+																									  levels[i].totalFrames))
 			end
 		else
 			local fill = "-------------------------------------------------------"
@@ -1047,6 +1064,7 @@ end
 -- Returns an ordering through a table based on the totalFrames field
 function genOrderedIndex( t )
     local orderedIndex = {}
+
     for key, value in pairs(t) do
         table.insert( orderedIndex, {index=key, t=value})
     end
@@ -1076,8 +1094,9 @@ end
 -- loop forever waiting for clients
 function getFitness(species, genome)
 	clearLevels()
-	local nextLevel = nextUnfinishedLevel()
 	while true do
+
+		nextLevel = nextUnfinishedLevel()
 
 		-- Is this generation complete?
 		if nextLevel == nil then
@@ -1116,9 +1135,11 @@ function getFitness(species, genome)
 				end
 			end
 
+			local percentage = math.floor(measured/total*100)
+
 			clientId = toks[1]
 
-			if #toks > 1 then
+			if #toks > 2 then
 				stateIndex = tonumber(toks[2])
 				iterationId = tonumber(toks[3])
 				distance = tonumber(toks[4])
@@ -1129,17 +1150,19 @@ function getFitness(species, genome)
 
 				fitnessResult = calculateFitness(distance, frames, wonLevel, reason, stateIndex)
 
-				-- Only use fresh results from new clients
-				if iterationId == iteration and versionCode == VERSION_CODE then
+				-- Only use fresh results from new clients (if we haven't already received this result)
+				if not levels[stateIndex].fitness
+					and iterationId == iteration
+					and versionCode == VERSION_CODE then
 					levels[stateIndex].fitness = fitnessResult
 					levels[stateIndex].totalFrames = levels[stateIndex].totalFrames + frames
 					levels[stateIndex].lastRequester = clientId
 					levels[stateIndex].reason = reason
+					levels[stateIndex].timesWon = levels[stateIndex].timesWon + wonLevel
 				end
 			end
 
 			-- Since we got a request, advance to the next level.
-			nextLevel = nextUnfinishedLevel()
 			if nextLevel then
 				local response = nextLevel .. "!" 
 								.. iteration .. "!" 
@@ -1147,15 +1170,14 @@ function getFitness(species, genome)
 								.. pool.currentSpecies .. "!" 
 								.. pool.currentGenome .. "!" 
 								.. math.floor(pool.maxFitness) .. "!" 
-								.. "(" .. math.floor(measured/total*100) .. "%)!"
+								.. "(" .. percentage .. "%)!"
 								.. serpent.dump(genome.network) .. "\n"
-				--print("REQUEST: " .. nextLevel)
 				levels[nextLevel].lastRequester = clientId
 				client:send(response)
 			else 
 				client:send("no_level")
 			end
-			printBoard()
+			printBoard(percentage)
 		else
 			print("Error: " .. err)
 		end
