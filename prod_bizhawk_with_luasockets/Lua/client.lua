@@ -11,7 +11,7 @@ function initConfigFile()
 		server = "129.21.64.237",
 		port = 56506,
 		demoFile = "",
-		drawGui = true
+		drawGui = false
 	}
 	local file = io.open("config.txt", "w")
 	file:write(serpent.dump(config))
