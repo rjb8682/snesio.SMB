@@ -310,11 +310,12 @@ function playGame(stateIndex, network)
 
 		if config.drawGui == true then
 			gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
-			gui.drawText(0, 10, "Gen " .. generation
-								.. " Species " .. currentSpecies
-								.. " Genome " .. currentGenome
-								.. " " .. percentage, 0xFF000000, 11)
-			gui.drawText(0, 22, "Fitness: " .. math.floor(fitness), 0xFF000000, 11)
+			gui.drawText(0, 10, "Generation: " .. generation
+								.. "." .. currentSpecies
+								.. "." .. currentGenome
+								.. " Fitness: " .. math.floor(fitness), 0xFF000000, 11)
+			local world, level = getWorldAndLevel(stateIndex)
+			gui.drawText(0, 22, "Level: " .. world .. "-" .. level .. " (" .. stateIndex .. ")", 0xFF000000, 11)
 			gui.drawText(120, 22, "Total Max: " .. maxFitness, 0xFF000000, 11)
 		end
 
@@ -415,7 +416,7 @@ while true do
 	-- If the server responded with the next game from the previous iteration,
 	-- then use that rather than asking for another level.
 	if nextResponseToUse then
-		print("using next level")
+		print("using next level from two-way connection")
 		response = nextResponseToUse
 		nextResponseToUse = nil
 	else
@@ -459,9 +460,9 @@ while true do
 			client2:send(results_to_send)
 
 			-- The server might send the next level right away
-			nextResponseToUse, err3 = client2:receive()
+			maybeResponse, err3 = client2:receive()
 			if not err3 and response ~= "no_level" then
-				print("got next level using same connection")
+				nextResponseToUse = maybeResponse
 			end
 		end
 		if client2 then
