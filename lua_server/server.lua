@@ -60,6 +60,10 @@ levels = {
 	{active = false, kind = "castle"}  -- 8-4, castle
 }
 
+-- This table keeps track of how many results + frames each client has returned
+-- This only increments when a client is the *first* to return a level's result
+clients = {}
+
 function nextUnfinishedLevel()
 	local i = levelIndex
 
@@ -1058,6 +1062,14 @@ function printBoard(percentage)
 			stdscr:addstr(string.format("| %1d-%1d |%30s|\n", world, level, fill))
 		end
 	end
+
+	stdscr:addstr("\n       --------------------------------------------\n")
+	stdscr:addstr("      | client        | levels     | frames        |\n")
+	for client, stats in pairs(clients) do
+		stdscr:addstr(string.format("      | %13s | %10d | %13d |", client, stats.levelsPlayed, stats.framesPlayed))
+		stdscr:addstr("\n")
+	end
+	stdscr:addstr("       --------------------------------------------\n\n")
 	stdscr:refresh()
 end
 
@@ -1159,6 +1171,16 @@ function getFitness(species, genome)
 					levels[stateIndex].lastRequester = clientId
 					levels[stateIndex].reason = reason
 					levels[stateIndex].timesWon = levels[stateIndex].timesWon + wonLevel
+
+
+					-- Update client stats
+					if not clients[clientId] then
+						stdscr:addstr("New client: " .. clientId)
+						stdscr:refresh()
+						clients[clientId] = {levelsPlayed = 0, framesPlayed = 0}	
+					end
+					clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
+					clients[clientId].framesPlayed = clients[clientId].framesPlayed + frames
 				end
 			end
 
