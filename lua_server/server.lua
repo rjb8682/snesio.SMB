@@ -64,6 +64,14 @@ levels = {
 -- This only increments when a client is the *first* to return a level's result
 clients = {}
 
+-- Keep track of the last TimeAverageSize times to keep a rolling average
+TimeAverageSize = 10
+timeAverageIndex = 1
+timeAverages = {}
+for z = 1, TimeAverageSize do
+	timeAverages[z] = 0
+end
+
 function nextUnfinishedLevel()
 	local i = levelIndex
 
@@ -803,7 +811,6 @@ function newGeneration()
 	
 	pool.generation = pool.generation + 1
 	
-	--print("writing backup file in newGeneration")
 	writeFile("backup." .. pool.generation .. "." .. "NEW_GENERATION")
 end
 	
@@ -819,22 +826,11 @@ function initializePool()
 	initializeRun()
 end
 
--- deleted clearJoypad
-
 function initializeRun()
-	-- savestate.load(Filename);
-	-- rightmost = 0
-	-- pool.currentFrame = 0
-	-- timeout = TimeoutConstant
-	-- clearJoypad()
-	
 	local species = pool.species[pool.currentSpecies]
 	local genome = species.genomes[pool.currentGenome]
 	generateNetwork(genome)
-	--evaluateCurrent()
 end
-
--- deleted evaluateCurrent
 
 print("is pool nil?")
 if pool == nil then
@@ -862,40 +858,13 @@ function fitnessAlreadyMeasured()
 	return genome.fitness ~= 0
 end
 
--- deleted displayGenome (genome)
-
 function writeFile(filename)
-    local file = io.open("backups/" .. filename, "w")
-	file:write(pool.generation .. "\n")
-	file:write(pool.maxFitness .. "\n")
-	file:write(#pool.species .. "\n")
-        for n,species in pairs(pool.species) do
-		file:write(species.topFitness .. "\n")
-		file:write(species.staleness .. "\n")
-		file:write(#species.genomes .. "\n")
-		for m,genome in pairs(species.genomes) do
-			file:write(genome.fitness .. "\n")
-			file:write(genome.maxneuron .. "\n")
-			for mutation,rate in pairs(genome.mutationRates) do
-				file:write(mutation .. "\n")
-				file:write(rate .. "\n")
-			end
-			file:write("done\n")
-			
-			file:write(#genome.genes .. "\n")
-			for l,gene in pairs(genome.genes) do
-				file:write(gene.into .. " ")
-				file:write(gene.out .. " ")
-				file:write(gene.weight .. " ")
-				file:write(gene.innovation .. " ")
-				if(gene.enabled) then
-					file:write("1\n")
-				else
-					file:write("0\n")
-				end
-			end
-		end
-        end
+	local file = io.open("backups/" .. filename, "w")
+	file:write(serpent.dump(pool))
+	file:write("\n")
+	file:write(serpent.dump(levels))
+	file:write("\n")
+	file:write(serpent.dump(clients))
         file:close()
 end
 
@@ -915,51 +884,17 @@ end
 
 function savePool()
 	local filename = "SERVER_BACKUP_3" 
-	print("writing file in savePool")
 	writeFile(filename)
 end
 
 function loadFile(filename)
-	print("CALLING LOADFILE")
-    local file = io.open("backups/" .. filename, "r")
-	pool = newPool()
-	pool.generation = file:read("*number")
-	pool.maxFitness = file:read("*number")
-	--forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
-    local numSpecies = file:read("*number")
-    for s=1,numSpecies do
-		local species = newSpecies()
-		table.insert(pool.species, species)
-		species.topFitness = file:read("*number")
-		species.staleness = file:read("*number")
-		local numGenomes = file:read("*number")
-		for g=1,numGenomes do
-			local genome = newGenome()
-			table.insert(species.genomes, genome)
-			genome.fitness = file:read("*number")
-			genome.maxneuron = file:read("*number")
-			local line = file:read("*line")
-			while line ~= "done" do
-				genome.mutationRates[line] = file:read("*number")
-				line = file:read("*line")
-			end
-			local numGenes = file:read("*number")
-			for n=1,numGenes do
-				local gene = newGene()
-				table.insert(genome.genes, gene)
-				local enabled
-				gene.into, gene.out, gene.weight, gene.innovation, enabled = file:read("*number", "*number", "*number", "*number", "*number")
-				if enabled == 0 then
-					gene.enabled = false
-				else
-					gene.enabled = true
-				end
-				
-			end
-		end
-	end
-    file:close()
+	local file = io.open("backups/" .. filename, "r")
+	ok1, pool   = serpent.load(file:read("*line"))
+	ok2, levels = serpent.load(file:read("*line"))
+	ok3, clients = serpent.load(file:read("*line"))
+	file:close()
 	
+	-- TODO: is this necessary?
 	while fitnessAlreadyMeasured() do
 		nextGenome()
 	end
@@ -1011,9 +946,8 @@ printf = function(s,...)
 lastSumFitness = 0
 function printBoard(percentage)
 	-- Print previous results
-	percentage = tostring(percentage) .. "%"
 	stdscr:mvaddstr(0,0,"####################################################\n")
-	stdscr:addstr(string.format("#       gen %3d species %3d genome %3d (%3s)       #\n",   pool.generation,
+	stdscr:addstr(string.format("#      gen %3d species %3d genome %3d (%3.1f%%)      #\n",   pool.generation,
 																					pool.currentSpecies,
 																					pool.currentGenome,
 																					percentage))
@@ -1032,7 +966,7 @@ function printBoard(percentage)
 				if levels[i].reason == "enemyDeath" then
 					stdscr:attron(curses.color_pair(2))
 				end
-				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f | %4d ~ %7d\n", world,
+				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f | %5d ~ %8d\n", world,
 																							level,
 																							levels[i].lastRequester,
 																							levels[i].reason,
@@ -1044,7 +978,7 @@ function printBoard(percentage)
 				stdscr:attroff(curses.color_pair(2))
 
 			else
-				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               | %4d ~ %7d\n", world,
+				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               | %5d ~ %8d\n", world,
 																									  level,
 																									  levels[i].lastRequester,
 																									  levels[i].timesWon,
@@ -1053,7 +987,7 @@ function printBoard(percentage)
 		else
 			local fill = "-------------------------------------------------------"
 			if levels[i].kind == "water" then
-				fill = "            Oo~Oo~Oo~Oo~Oo~Oo~              "
+				fill = "             Oo~Oo~Oo~Oo~Oo~Oo~             "
 			else
 				if levels[i].kind == "castle" then
 					fill = "______________[^]__[^__^]__[^]______________"
@@ -1064,9 +998,14 @@ function printBoard(percentage)
 	end
 
 	stdscr:addstr("\n       --------------------------------------------\n")
-	stdscr:addstr("      | client        | levels     | frames        |\n")
+	stdscr:addstr("      | client        | levels        | frames     |\n")
+	local totalLevelsPlayed = 0
 	for client, stats in pairs(clients) do
-		stdscr:addstr(string.format("      | %13s | %10d | %13d |", client, stats.levelsPlayed, stats.framesPlayed))
+		totalLevelsPlayed = totalLevelsPlayed + stats.levelsPlayed
+	end
+	for client, stats in pairs(clients) do
+		local percent = (stats.levelsPlayed / totalLevelsPlayed) * 100
+		stdscr:addstr(string.format("      | %13s | %7d %4.1f%% | %10d |", client, stats.levelsPlayed, percent, stats.framesPlayed))
 		stdscr:addstr("\n")
 	end
 	stdscr:addstr("       --------------------------------------------\n\n")
@@ -1081,13 +1020,25 @@ function genOrderedIndex( t )
         table.insert( orderedIndex, {index=key, t=value})
     end
     table.sort( orderedIndex, function(a, b) return a.t.totalFrames > b.t.totalFrames end)
-    --[[
-    for key,value in pairs(orderedIndex) do
-    	stdscr:addstr("[" .. key .. ":" .. value.t.totalFrames .. ":" .. value.index .. "] ")
-    end
-    stdscr:refresh()
-    ]]--
     return orderedIndex
+end
+
+function addTimeAverage(time)
+	timeAverages[timeAverageIndex] = time
+	timeAverageIndex = timeAverageIndex + 1
+	if timeAverageIndex > TimeAverageSize then
+		timeAverageIndex = 1
+	end
+end
+
+function getAverageTime()
+	local totalTime = 0
+	local numTimes = 0
+	for key, value in pairs(timeAverages) do
+		totalTime = totalTime + value
+		if value > 0 then numTimes = numTimes + 1 end
+	end
+	return totalTime / numTimes
 end
 
 function calculateFitness(distance, frames, wonLevel, reason, stateIndex)
@@ -1147,7 +1098,8 @@ function getFitness(species, genome)
 				end
 			end
 
-			local percentage = math.floor(measured/total*100)
+			local percentageFloat = (measured / total) * 100
+			local percentage = math.floor(percentageFloat)
 
 			clientId = toks[1]
 
@@ -1199,7 +1151,7 @@ function getFitness(species, genome)
 			else 
 				client:send("no_level")
 			end
-			printBoard(percentage)
+			printBoard(percentageFloat)
 		else
 			print("Error: " .. err)
 		end
@@ -1216,11 +1168,12 @@ if #arg > 0 then
 end
 
 -- How many iterations to wait before saving a checkpoint
-SAVE_EVERY = 5
+SAVE_EVERY = 25
 -- How many iterations ago we last saved
 lastSaved = 999
 
 while true do
+	local startTime = socket.gettime()
 
 	initializeRun()
 
@@ -1232,9 +1185,7 @@ while true do
 	local genome = species.genomes[pool.currentGenome]
 
 	-- This calls the clients
-	local startTime = os.time()
 	local fitness = getFitness(species, genome)
-	local endTime = os.time()
 
 	lastSumFitness = fitness
 	genome.fitness = fitness
@@ -1256,7 +1207,11 @@ while true do
 		lastCheckpoint = os.date("%c", os.time())
 	end
 
-	stdscr:addstr("took " .. (endTime - startTime) .. " seconds\n")
+	local endTime = socket.gettime()
+
+	addTimeAverage(endTime - startTime)
+	stdscr:addstr(string.format("last   : %5.3f seconds\n", endTime - startTime))
+	stdscr:addstr(string.format("average: %5.3f seconds\n", getAverageTime()))
 	stdscr:addstr("saved last checkpoint at " .. lastCheckpoint)
 	-- Refresh to show the iteration time + our last checkpoint	
 	stdscr:refresh()
