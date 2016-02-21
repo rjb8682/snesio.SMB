@@ -998,14 +998,14 @@ function printBoard(percentage)
 	end
 
 	stdscr:addstr("\n       --------------------------------------------\n")
-	stdscr:addstr("      | client        | levels        | frames     |\n")
+	stdscr:addstr("      | client        | levels        | frames     | stale\n")
 	local totalLevelsPlayed = 0
 	for client, stats in pairs(clients) do
 		totalLevelsPlayed = totalLevelsPlayed + stats.levelsPlayed
 	end
 	for client, stats in pairs(clients) do
 		local percent = (stats.levelsPlayed / totalLevelsPlayed) * 100
-		stdscr:addstr(string.format("      | %13s | %7d %4.1f%% | %10d |", client, stats.levelsPlayed, percent, stats.framesPlayed))
+		stdscr:addstr(string.format("      | %13s | %7d %4.1f%% | %10d | %7d", client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
 		stdscr:addstr("\n")
 	end
 	stdscr:addstr("       --------------------------------------------\n\n")
@@ -1114,6 +1114,13 @@ function getFitness(species, genome)
 
 				fitnessResult = calculateFitness(distance, frames, wonLevel, reason, stateIndex)
 
+				-- Is this a new client?
+				if not clients[clientId] then
+					stdscr:addstr("New client: " .. clientId)
+					stdscr:refresh()
+					clients[clientId] = {levelsPlayed = 0, framesPlayed = 0, staleLevels = 0}	
+				end
+
 				-- Only use fresh results from new clients (if we haven't already received this result)
 				if not levels[stateIndex].fitness
 					and iterationId == iteration
@@ -1126,13 +1133,11 @@ function getFitness(species, genome)
 
 
 					-- Update client stats
-					if not clients[clientId] then
-						stdscr:addstr("New client: " .. clientId)
-						stdscr:refresh()
-						clients[clientId] = {levelsPlayed = 0, framesPlayed = 0}	
-					end
 					clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
 					clients[clientId].framesPlayed = clients[clientId].framesPlayed + frames
+				else
+					-- Didn't make it in time--update stale counter
+					clients[clientId].staleLevels = clients[clientId].staleLevels + 1
 				end
 			end
 
