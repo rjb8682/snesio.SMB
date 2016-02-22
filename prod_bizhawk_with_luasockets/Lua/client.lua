@@ -8,7 +8,7 @@ function initConfigFile()
 	-- Set default config file state here
 	config = {
 		clientId = "default_name",
-		server = "129.21.64.237",
+		server = "129.21.141.45",
 		port = 56506,
 		demoFile = "",
 		drawGui = false,
