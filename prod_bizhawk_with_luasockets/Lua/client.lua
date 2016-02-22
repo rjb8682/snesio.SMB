@@ -4,9 +4,6 @@ local socket = require("socket")
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
 local VERSION_CODE = 5
 
--- Setting to false turns off all non-critical printing
-local DEBUG = true
-
 function initConfigFile()
 	-- Set default config file state here
 	config = {
@@ -14,7 +11,8 @@ function initConfigFile()
 		server = "129.21.64.237",
 		port = 56506,
 		demoFile = "",
-		drawGui = false
+		drawGui = false,
+		debug = false
 	}
 	local file = io.open("config.txt", "w")
 	file:write(serpent.dump(config))
@@ -324,7 +322,7 @@ function playGame(stateIndex, network)
 
 		-- Check for death
 		if playerState == 6 or playerState == 0x0B or verticalScreenPosition > 1 then
-			console.writeline("Player Died")
+			if config.debug then console.writeline("Player Died") end
 			local reason = "enemyDeath"
 			if verticalScreenPosition > 1 then reason = "fell" end
 			return rightmost, currentFrame, 0, reason, stateIndex
@@ -420,7 +418,7 @@ while true do
 	-- If the server responded with the next game from the previous iteration,
 	-- then use that rather than asking for another level.
 	if nextResponseToUse then
-		if DEBUG then print("using next level from two-way connection") end
+		if config.debug then print("using next level from two-way connection") end
 		response = nextResponseToUse
 		nextResponseToUse = nil
 	else
@@ -451,13 +449,13 @@ while true do
 		-- (based on the iterationId)
 		if toks[8] ~= "no_network" then
 			ok, network = serpent.load(toks[8])
-			if DEBUG then print("received new neural network") end
+			if config.debug then print("received new neural network") end
 		else
-			if DEBUG then print("reusing neural network") end
+			if config.debug then print("reusing neural network") end
 		end
 
 		local dist, frames, wonLevel, reason = playGame(stateId, network)
-		if DEBUG then print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason) end
+		if config.debug then print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason) end
 
 		-- Send it back yo
 		local results_to_send = config.clientId .. "!" .. stateId .. "!"
@@ -474,7 +472,7 @@ while true do
 			-- The server might send the next level right away
 			maybeResponse, err3 = client2:receive()
 			if not err3 and response ~= "no_level" then
-				if DEBUG then print("received next level from two-way connection") end
+				if config.debug then print("received next level from two-way connection") end
 				nextResponseToUse = maybeResponse
 			end
 		end
