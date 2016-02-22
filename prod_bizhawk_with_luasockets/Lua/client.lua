@@ -2,7 +2,7 @@ local serpent = require("serpent")
 local socket = require("socket")
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 4
+local VERSION_CODE = 5
 
 function initConfigFile()
 	-- Set default config file state here
@@ -405,13 +405,14 @@ if config.demoFile and config.demoFile ~= "" then
 end
 -------------------- END DEMO CODE ONLY -------------------------------------
 
-
+-- Global so that we can re-use the network when possible
+network = nil
 
 -- loop forever waiting for games to play
 while true do
 	emu.frameadvance()
 
-	local toks, stateId, iterationId, ok, network, fitness
+	local toks, stateId, iterationId, ok, fitness
 
 	-- If the server responded with the next game from the previous iteration,
 	-- then use that rather than asking for another level.
@@ -442,7 +443,12 @@ while true do
 		currentGenome = toks[5]
 		maxFitness = toks[6]
 		percentage = toks[7]
-		ok, network = serpent.load(toks[8])
+
+		-- The server won't re-send the network if we already have an up-to-date version
+		-- (based on the iterationId)
+		if toks[8] ~= "no_need" then
+			ok, network = serpent.load(toks[8])
+		end
 
 		local dist, frames, wonLevel, reason = playGame(stateId, network)
 		print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason)
