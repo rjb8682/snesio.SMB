@@ -2,7 +2,10 @@ local serpent = require("serpent")
 local socket = require("socket")
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 4
+local VERSION_CODE = 5
+
+-- Setting to false turns off all non-critical printing
+local DEBUG = true
 
 function initConfigFile()
 	-- Set default config file state here
@@ -405,18 +408,19 @@ if config.demoFile and config.demoFile ~= "" then
 end
 -------------------- END DEMO CODE ONLY -------------------------------------
 
-
+-- Global so that we can re-use the network when possible
+network = nil
 
 -- loop forever waiting for games to play
 while true do
 	emu.frameadvance()
 
-	local toks, stateId, iterationId, ok, network, fitness
+	local toks, stateId, iterationId, ok, fitness
 
 	-- If the server responded with the next game from the previous iteration,
 	-- then use that rather than asking for another level.
 	if nextResponseToUse then
-		print("using next level from two-way connection")
+		if DEBUG then print("using next level from two-way connection") end
 		response = nextResponseToUse
 		nextResponseToUse = nil
 	else
@@ -442,10 +446,18 @@ while true do
 		currentGenome = toks[5]
 		maxFitness = toks[6]
 		percentage = toks[7]
-		ok, network = serpent.load(toks[8])
+
+		-- The server won't re-send the network if we already have an up-to-date version
+		-- (based on the iterationId)
+		if toks[8] ~= "no_network" then
+			ok, network = serpent.load(toks[8])
+			if DEBUG then print("received new neural network") end
+		else
+			if DEBUG then print("reusing neural network") end
+		end
 
 		local dist, frames, wonLevel, reason = playGame(stateId, network)
-		print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason)
+		if DEBUG then print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason) end
 
 		-- Send it back yo
 		local results_to_send = config.clientId .. "!" .. stateId .. "!"
@@ -462,6 +474,7 @@ while true do
 			-- The server might send the next level right away
 			maybeResponse, err3 = client2:receive()
 			if not err3 and response ~= "no_level" then
+				if DEBUG then print("received next level from two-way connection") end
 				nextResponseToUse = maybeResponse
 			end
 		end
