@@ -65,7 +65,7 @@ levels = {
 clients = {}
 
 -- Keep track of the last TimeAverageSize times to keep a rolling average
-TimeAverageSize = 10
+TimeAverageSize = 25
 timeAverageIndex = 1
 timeAverages = {}
 for z = 1, TimeAverageSize do
@@ -1057,6 +1057,10 @@ end
 -- loop forever waiting for clients
 function getFitness(species, genome)
 	clearLevels()
+	connectionCount = 0
+	totalTimeCommunicating = 0
+	totalTimeWaiting = 0
+
 	while true do
 
 		nextLevel = nextUnfinishedLevel()
@@ -1077,9 +1081,15 @@ function getFitness(species, genome)
 		end
 
 		-- Not done. Wait for a connection from any client
+		local startTimeWaiting = socket.gettime()
 		local client = server:accept()
+		totalTimeWaiting = totalTimeWaiting + (socket.gettime() - startTimeWaiting)
+
 		-- Receive the line
+		local startTimeCommunicating = socket.gettime()
 		local line, err = client:receive()
+
+		connectionCount = connectionCount + 1
 
 		-- Was it good?
 		if not err then
@@ -1098,10 +1108,13 @@ function getFitness(species, genome)
 				end
 			end
 
-			local percentageFloat = (measured / total) * 100
-			local percentage = math.floor(percentageFloat)
+			percentageFloat = (measured / total) * 100
+			percentage = math.floor(percentageFloat)
 
 			clientId = toks[1]
+
+			-- Should we re-send the network to the client?
+			local shouldResendNetwork = true
 
 			if #toks > 2 then
 				stateIndex = tonumber(toks[2])
@@ -1121,6 +1134,11 @@ function getFitness(species, genome)
 					clients[clientId] = {levelsPlayed = 0, framesPlayed = 0, staleLevels = 0}	
 				end
 
+				-- Don't re-send the network if this client has the correct iterationId
+				if iterationId == iteration then
+					--shouldResendNetwork = false TODO uncomment
+				end
+
 				-- Only use fresh results from new clients (if we haven't already received this result)
 				if not levels[stateIndex].fitness
 					and iterationId == iteration
@@ -1131,7 +1149,6 @@ function getFitness(species, genome)
 					levels[stateIndex].reason = reason
 					levels[stateIndex].timesWon = levels[stateIndex].timesWon + wonLevel
 
-
 					-- Update client stats
 					clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
 					clients[clientId].framesPlayed = clients[clientId].framesPlayed + frames
@@ -1141,8 +1158,12 @@ function getFitness(species, genome)
 				end
 			end
 
-			-- Since we got a request, advance to the next level.
+			-- Since we got a request, advance to the next level
 			if nextLevel then
+				local networkToSend = "no_network"
+				if shouldResendNetwork == true then -- TODO is == true necessary?
+					networkToSend = serpent.dump(genome.network)
+				end
 				local response = nextLevel .. "!" 
 								.. iteration .. "!" 
 								.. pool.generation .. "!" 
@@ -1150,19 +1171,23 @@ function getFitness(species, genome)
 								.. pool.currentGenome .. "!" 
 								.. math.floor(pool.maxFitness) .. "!" 
 								.. "(" .. percentage .. "%)!"
-								.. serpent.dump(genome.network) .. "\n"
+								.. networkToSend .. "\n"
 				levels[nextLevel].lastRequester = clientId
 				client:send(response)
 			else 
 				client:send("no_level")
 			end
-			printBoard(percentageFloat)
+
+			totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
+
 		else
 			print("Error: " .. err)
 		end
 
 		-- done with client, close the object
 		client:close()
+
+		printBoard(percentageFloat)
 	end
 end
 
@@ -1175,7 +1200,7 @@ end
 -- How many iterations to wait before saving a checkpoint
 SAVE_EVERY = 25
 -- How many iterations ago we last saved
-lastSaved = 999
+lastSaved = 0
 
 while true do
 	local startTime = socket.gettime()
@@ -1215,10 +1240,19 @@ while true do
 	local endTime = socket.gettime()
 
 	addTimeAverage(endTime - startTime)
-	stdscr:addstr(string.format("last   : %5.3f seconds\n", endTime - startTime))
-	stdscr:addstr(string.format("average: %5.3f seconds\n", getAverageTime()))
-	stdscr:addstr("saved last checkpoint at " .. lastCheckpoint)
-	-- Refresh to show the iteration time + our last checkpoint	
+	stdscr:addstr(string.format("last   : %5.3fs | average: %5.3fs\n",
+		endTime - startTime, getAverageTime()))
+
+	stdscr:addstr(string.format("%2d connections | %5.3fs waiting | %5.3fs communicating\n",
+		connectionCount, totalTimeWaiting, totalTimeCommunicating))
+
+	if lastCheckpoint then
+		stdscr:addstr("\nsaved last checkpoint at " .. lastCheckpoint)
+	end
+
+	stdscr:refresh()
+
+	-- Refresh to show the iteration time + our last checkpoint
 	stdscr:refresh()
 
 	pool.currentSpecies = 1
