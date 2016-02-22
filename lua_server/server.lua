@@ -1,6 +1,6 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local server = assert(socket.bind("*", 56506))
+local server = assert(socket.bind("*", 56507))
 local ip, port = server:getsockname()
 
 ---- Set up curses
@@ -20,7 +20,7 @@ curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
 iteration = 0
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 4
+local VERSION_CODE = 5
 
 -- New field: totalFrames. TODO: consider using average frames over the last 100
 -- iterations for example. May not be worth the extra work, honestly. Even easier
@@ -1136,7 +1136,7 @@ function getFitness(species, genome)
 
 				-- Don't re-send the network if this client has the correct iterationId
 				if iterationId == iteration then
-					--shouldResendNetwork = false TODO uncomment
+					shouldResendNetwork = false
 				end
 
 				-- Only use fresh results from new clients (if we haven't already received this result)
@@ -1240,10 +1240,10 @@ while true do
 	local endTime = socket.gettime()
 
 	addTimeAverage(endTime - startTime)
-	stdscr:addstr(string.format("last   : %5.3fs | average: %5.3fs\n",
+	stdscr:addstr(string.format("last: %5.3fs | average: %5.3fs ",
 		endTime - startTime, getAverageTime()))
 
-	stdscr:addstr(string.format("%2d connections | %5.3fs waiting | %5.3fs communicating\n",
+	stdscr:addstr(string.format("| %2d conns | %5.3fs waiting | %5.3fs communicating\n",
 		connectionCount, totalTimeWaiting, totalTimeCommunicating))
 
 	if lastCheckpoint then
