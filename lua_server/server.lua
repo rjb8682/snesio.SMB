@@ -1,6 +1,6 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local server = assert(socket.bind("*", 56507))
+local server = assert(socket.bind("*", 56506))
 local ip, port = server:getsockname()
 
 ---- Set up curses
