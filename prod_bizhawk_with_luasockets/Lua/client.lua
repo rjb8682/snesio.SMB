@@ -215,7 +215,7 @@ function sigmoid(x)
 end
 
 function evaluateNetwork(network, inputs)
-	table.insert(inputs, 1) -- wtf is this?
+	table.insert(inputs, 1) -- BIAS NEURON
 
 	if #inputs ~= Inputs then
 		console.writeline("Incorrect number of neural network inputs.")
@@ -349,6 +349,10 @@ function playGame(stateIndex, network)
 		-- Advance frame since we didn't win / die
 		currentFrame = currentFrame + 1
 		emu.frameadvance()
+
+		if config.drawGui then
+			displayGenome(network)
+		end
 	end
 end
 
@@ -403,6 +407,133 @@ if config.demoFile and config.demoFile ~= "" then
 			z = 1
 		end
 	end
+end
+
+function displayGenome(network)
+	local network = network
+	local cells = {}
+	local i = 1
+	local cell = {}
+	for dy=-BoxRadius,BoxRadius do
+		for dx=-BoxRadius,BoxRadius do
+			cell = {}
+			cell.x = 50+5*dx
+			cell.y = 70+5*dy
+			cell.value = network.neurons[i].value
+			cells[i] = cell
+			i = i + 1
+		end
+	end
+	local biasCell = {}
+	biasCell.x = 80
+	biasCell.y = 110
+	biasCell.value = network.neurons[Inputs].value
+	cells[Inputs] = biasCell
+	
+	for o = 1,Outputs do
+		cell = {}
+		cell.x = 220
+		cell.y = 30 + 8 * o
+		cell.value = network.neurons[MaxNodes + o].value
+		cells[MaxNodes+o] = cell
+		local color
+		if cell.value > 0 then
+			color = 0xFF0000FF
+		else
+			color = 0xFF000000
+		end
+		gui.drawText(223, 24+8*o, ButtonNames[o], color, 9)
+	end
+	
+	for n,neuron in pairs(network.neurons) do
+		cell = {}
+		if n > Inputs and n <= MaxNodes then
+			cell.x = 140
+			cell.y = 40
+			cell.value = neuron.value
+			cells[n] = cell
+		end
+	end
+	
+	for n=1,4 do
+		for _,gene in pairs(network.neurons) do
+			if gene.enabled then
+				local c1 = cells[gene.into]
+				local c2 = cells[gene.out]
+				if gene.into > Inputs and gene.into <= MaxNodes then
+					c1.x = 0.75*c1.x + 0.25*c2.x
+					if c1.x >= c2.x then
+						c1.x = c1.x - 40
+					end
+					if c1.x < 90 then
+						c1.x = 90
+					end
+					
+					if c1.x > 220 then
+						c1.x = 220
+					end
+					c1.y = 0.75*c1.y + 0.25*c2.y
+					
+				end
+				if gene.out > Inputs and gene.out <= MaxNodes then
+					c2.x = 0.25*c1.x + 0.75*c2.x
+					if c1.x >= c2.x then
+						c2.x = c2.x + 40
+					end
+					if c2.x < 90 then
+						c2.x = 90
+					end
+					if c2.x > 220 then
+						c2.x = 220
+					end
+					c2.y = 0.25*c1.y + 0.75*c2.y
+				end
+			end
+		end
+	end
+	
+	gui.drawBox(50-BoxRadius*5-3,70-BoxRadius*5-3,50+BoxRadius*5+2,70+BoxRadius*5+2,0xFF000000, 0x80808080)
+	for n,cell in pairs(cells) do
+		if n > Inputs or cell.value ~= 0 then
+			local color = math.floor((cell.value+1)/2*256)
+			if color > 255 then color = 255 end
+			if color < 0 then color = 0 end
+			local opacity = 0xFF000000
+			if cell.value == 0 then
+				opacity = 0x50000000
+			end
+			color = opacity + color*0x10000 + color*0x100 + color
+			gui.drawBox(cell.x-2,cell.y-2,cell.x+2,cell.y+2,opacity,color)
+		end
+	end
+	-- for _,gene in pairs(genome.genes) do
+	-- 	if gene.enabled then
+	-- 		local c1 = cells[gene.into]
+	-- 		local c2 = cells[gene.out]
+	-- 		local opacity = 0xA0000000
+	-- 		if c1.value == 0 then
+	-- 			opacity = 0x20000000
+	-- 		end
+			
+	-- 		local color = 0x80-math.floor(math.abs(sigmoid(gene.weight))*0x80)
+	-- 		if gene.weight > 0 then 
+	-- 			color = opacity + 0x8000 + 0x10000*color
+	-- 		else
+	-- 			color = opacity + 0x800000 + 0x100*color
+	-- 		end
+	-- 		gui.drawLine(c1.x+1, c1.y, c2.x-3, c2.y, color)
+	-- 	end
+	-- end
+	
+	gui.drawBox(49,71,51,78,0x00000000,0x80FF0000)
+	
+	-- if forms.ischecked(showMutationRates) then
+	-- 	local pos = 100
+	-- 	for mutation,rate in pairs(genome.mutationRates) do
+	-- 		gui.drawText(100, pos, mutation .. ": " .. rate, 0xFF000000, 10)
+	-- 		pos = pos + 8
+	-- 	end
+	-- end
 end
 -------------------- END DEMO CODE ONLY -------------------------------------
 

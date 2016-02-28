@@ -1,8 +1,33 @@
-BoxRadius = 6
-InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
+BoxRadiusX = 10 -- 6, 6, 2, 0
+BoxRadiusY = 10
+ShiftX = 2
+ShiftY = 2
+InputSize = (BoxRadiusX*2+1)*(BoxRadiusY*2+1)
 
-Inputs = InputSize + 3
+-- How many pixels away (manhattan distance) to check for an enemy
+EnemyTolerance = 8
 
+Inputs = InputSize + 3 -- marioVX, marioVY, BIAS NEURON
+
+-- Tile types
+BOTTOM_TILE = 84
+BRICK = 82
+COIN = 194
+
+ENEMY_TYPES = 0x0016
+
+-- Enemy types
+LIFT_START = 0x24
+LIFT_END = 0x2C
+TRAMPOLINE = 0x32
+
+-- (shouldn't be conflicting with real enemy types)
+HAMMER_TYPE = 0x0abc0af
+
+-- Hammers
+HAMMER_STATUS_START = 0x002A
+HAMMER_STATUS_END = 0x0032
+HAMMER_HITBOXES = 0x04D0
 
 function mysplit(inputstr, sep)
 	if sep == nil then
@@ -31,21 +56,20 @@ function getPositions()
 
 		verticalScreenPosition = memory.readbyte(0x00B5)
 
-		-- New inputs!!
-		marioCurX = memory.read_s8(0x0086)
-		marioCurY = memory.read_s8(0x03B8)
+		marioCurX = memory.readbyte(0x0086)
+		marioCurY = memory.readbyte(0x03B8)
 		marioVX = memory.read_s8(0x0057)
 		marioVY = memory.read_s8(0x009F)
 
 		marioWorld = memory.read_s8(0x075F)
 		marioLevel = memory.read_s8(0x0760)
-
-		--console.writeline("vx " .. marioVX)
-		--console.writeline("vy " .. marioVY)
-		-- New inputs!!
 	
 		screenX = memory.readbyte(0x03AD)
 		screenY = memory.readbyte(0x03B8)
+
+		-- print("marioCurX: " .. marioCurX .. " marioCurY: " .. marioCurY)
+		-- print("marioX: " .. marioX .. " marioY: " .. marioY)
+		-- print("screenX: " .. screenX .. " screenY: " .. screenY)
 	end
 end
 
@@ -63,7 +87,10 @@ function getTile(dx, dy)
 			return 0
 		end
 		
-		if memory.readbyte(addr) ~= 0 then
+		tile = memory.readbyte(addr)
+		-- Don't let Mario see coins.
+		if tile ~= 0 and tile ~= COIN then
+			--print(tostring(x) .. ", " .. tostring(y) .. ": " .. tostring(memory.readbyte(addr)))
 			return 1
 		else
 			return 0
@@ -72,14 +99,33 @@ function getTile(dx, dy)
 end
 
 function getSprites()
+	--print("-----sprites--------")
 	if gameinfo.getromname() == "Super Mario Bros." then
 		local sprites = {}
-		for slot=0,4 do
+		for slot=0,4 do -- TODO SHOULDNT THIS BE 5?!
 			local enemy = memory.readbyte(0xF+slot)
+			local enemyType = memory.readbyte(ENEMY_TYPES + slot)
 			if enemy ~= 0 then
 				local ex = memory.readbyte(0x6E + slot)*0x100 + memory.readbyte(0x87+slot)
 				local ey = memory.readbyte(0xCF + slot)+24
-				sprites[#sprites+1] = {["x"]=ex,["y"]=ey}
+				--print(enemyType .. ": " .. ex .. ", " .. ey)
+				sprites[#sprites+1] = {x=ex,y=ey,t=enemyType}
+			end
+		end
+		--print("------hammers-------")
+		for addr=HAMMER_STATUS_START,HAMMER_STATUS_END do
+			local hammerSlot = memory.readbyte(addr)
+			-- Is this hammer active?
+			if hammerSlot ~= 0 then
+				hammerAddr = HAMMER_HITBOXES + 4 * (addr - HAMMER_STATUS_START)
+				--print("slot: " .. hammerSlot .. " addr: " .. hammerAddr)
+				-- Take the center of the hitbox
+				local cx = (memory.readbyte(hammerAddr + 0)
+					      + memory.readbyte(hammerAddr + 2) + 0.5) / 2
+				local cy = (memory.readbyte(hammerAddr + 1) +
+					        memory.readbyte(hammerAddr + 3) + 0.5) / 2
+				--print(hammerSlot .. ": " .. (cx - marioCurX) .. ", " .. (cy - marioCurY))
+				sprites[#sprites+1] = {x=cx,y=cy,t=HAMMER_TYPE}
 			end
 		end
 		
@@ -87,72 +133,99 @@ function getSprites()
 	end
 end
 
-function getExtendedSprites()
-	if gameinfo.getromname() == "Super Mario Bros." then
-		return {}
-	end
-end
-
 function getInputs()
 	getPositions()
 	
 	sprites = getSprites()
-	extended = getExtendedSprites()
 
 	local inputs = {}
+
+	YStart = -(BoxRadiusY-ShiftY)*16
+	YEnd =    (BoxRadiusY+ShiftY)*16
+	XStart = -(BoxRadiusX-ShiftX)*16
+	XEnd =    (BoxRadiusX+ShiftX)*16
 	
-	for dy=-BoxRadius*16,BoxRadius*16,16 do
-		s = ""
-		for dx=-BoxRadius*16,BoxRadius*16,16 do
+	for dy=-(BoxRadiusY-ShiftY)*16,(BoxRadiusY+ShiftY)*16,16 do
+		for dx=-(BoxRadiusX-ShiftX)*16,(BoxRadiusX+ShiftX)*16,16 do
 			inputs[#inputs+1] = 0
 			
+			--print("dx: " .. dx .. " dy: " .. dy)
+			for i = 1,#sprites do
+				-- Lifts are sprites, but not enemies. Make them a 1.
+				-- TODO: Trampolines??
+				if sprites[i].t == HAMMER_TYPE then
+					-- Hammers are relative on the screen, but use an axis starting at 0
+					distx = math.abs(sprites[i].x - screenX - (dx-8)) -- was 8
+					disty = math.abs(sprites[i].y - screenY - (dy-8)) -- was 8
+					--print("H -> x: " .. sprites[i].x .. " y: " .. sprites[i].y .. " distx: " .. distx .. " disty: " .. disty)
+				else
+					-- Otherwise, calculate relative to start of level
+					distx = math.abs(sprites[i].x - (marioX+dx-8))
+					disty = math.abs(sprites[i].y - (marioY+dy-8))
+					--print("* -> distx: " .. distx .. " disty: " .. disty)
+				end
+				if distx <= EnemyTolerance and disty <= EnemyTolerance then
+					if sprites[i].t >= LIFT_START and sprites[i].t < LIFT_END then
+						inputs[#inputs] = 1
+					else
+						inputs[#inputs] = -1
+					end
+				end
+			end
+
+			-- Write tiles AFTER sprites, so that vines don't show up
+			-- on top of pipes even when they're inside.
+			-- This means that hammer bros jumping are briefly not shown
 			tile = getTile(dx, dy)
 			if tile == 1 and marioY+dy < 0x1B0 then
 				inputs[#inputs] = 1
 			end
-			
-			for i = 1,#sprites do
-				distx = math.abs(sprites[i]["x"] - (marioX+dx))
-				disty = math.abs(sprites[i]["y"] - (marioY+dy))
-				if distx <= 8 and disty <= 8 then
-					inputs[#inputs] = -1
-				end
-			end
-
-			for i = 1,#extended do
-				distx = math.abs(extended[i]["x"] - (marioX+dx))
-				disty = math.abs(extended[i]["y"] - (marioY+dy))
-				if distx < 8 and disty < 8 then
-					inputs[#inputs] = -1
-				end
-			end
-			latex = true
-
-			if latex then
-				if inputs[#inputs] >= 0 then
-					s = s .. "  "
-				else
-					s = s .. " "
-				end
-			end
-			s = s .. tostring(inputs[#inputs])
-			if latex then
-				if dx ~= BoxRadius * 16 then
-					s = s .. " &"
-				end
-			end
 		end
-		print(s .. " \\\\")
 	end
-	print("################################################")
 
-	inputs[#inputs+1] = marioVX
-	inputs[#inputs+1] = marioVY
+	--inputs[#inputs+1] = marioVX
+	--inputs[#inputs+1] = marioVY
 	
 	return inputs
 end
 
+function displayGenome(inputs)
+	local cells = {}
+	local i = 1
+	local cell = {}
+	for dy=-BoxRadiusY,BoxRadiusY do
+		for dx=-BoxRadiusX,BoxRadiusX do
+			cell = {}
+			cell.x = 50+5*dx
+			cell.y = 70+5*dy
+			cell.value = inputs[i]
+			cells[i] = cell
+			i = i + 1
+		end
+	end
+	
+	gui.drawBox(50-BoxRadiusX*5-3,70-BoxRadiusY*5-3,50+BoxRadiusX*5+2,70+BoxRadiusY*5+2,0xFF000000, 0x80808080)
+	for n,cell in pairs(cells) do
+		if n > Inputs or cell.value ~= 0 then
+			local color = math.floor((cell.value+1)/2*256)
+			if color > 255 then color = 255 end
+			if color < 0 then color = 0 end
+			local opacity = 0xFF000000
+			if cell.value == 0 then
+				opacity = 0x50000000
+			end
+			color = opacity + color*0x10000 + color*0x100 + color
+			gui.drawBox(cell.x-2,cell.y-2,cell.x+2,cell.y+2,opacity,color)
+		end
+	end
+	
+	XChange = ShiftX * 6
+	YChange = ShiftY * 5
+	gui.drawBox(49-XChange,72-YChange,55-XChange,78-YChange,0x00000000,0x80FF0000)
+end
+
 while true do
-	getInputs()
+	inputs = getInputs()
+	displayGenome(inputs)
 	emu.frameadvance();
 end
