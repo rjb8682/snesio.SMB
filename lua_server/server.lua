@@ -20,7 +20,7 @@ curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
 iteration = 0
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 5
+local VERSION_CODE = 6
 
 -- New field: totalFrames. TODO: consider using average frames over the last 100
 -- iterations for example. May not be worth the extra work, honestly. Even easier
