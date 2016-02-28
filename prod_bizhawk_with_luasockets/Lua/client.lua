@@ -386,6 +386,41 @@ function loadNetwork(filename)
 	return network
 end
 
+function displayGenome(network)
+	local cells = {}
+	local i = 1
+	local cell = {}
+	for dy=-BoxRadiusY,BoxRadiusY do
+		for dx=-BoxRadiusX,BoxRadiusX do
+			cell = {}
+			cell.x = 50+5*dx
+			cell.y = 70+5*dy
+			cell.value = network.neurons[i].value
+			cells[i] = cell
+			i = i + 1
+		end
+	end
+	
+	gui.drawBox(50-BoxRadiusX*5-3,70-BoxRadiusY*5-3,50+BoxRadiusX*5+2,70+BoxRadiusY*5+2,0xFF000000, 0x80808080)
+	for n,cell in pairs(cells) do
+		if n > Inputs or cell.value ~= 0 then
+			local color = math.floor((cell.value+1)/2*256)
+			if color > 255 then color = 255 end
+			if color < 0 then color = 0 end
+			local opacity = 0xFF000000
+			if cell.value == 0 then
+				opacity = 0x50000000
+			end
+			color = opacity + color*0x10000 + color*0x100 + color
+			gui.drawBox(cell.x-2,cell.y-2,cell.x+2,cell.y+2,opacity,color)
+		end
+	end
+	
+	XChange = ShiftX * 6
+	YChange = ShiftY * 5
+	gui.drawBox(49-XChange,72-YChange,55-XChange,78-YChange,0x00000000,0x80FF0000)
+end
+
 ------------------------ DEMO CODE ONLY -------------------------------------
 WorldAugmenter = 0.2
 LevelAugmenter = 0.1
@@ -430,41 +465,6 @@ if config.demoFile and config.demoFile ~= "" then
 			z = 1
 		end
 	end
-end
-
-function displayGenome(network)
-	local cells = {}
-	local i = 1
-	local cell = {}
-	for dy=-BoxRadiusY,BoxRadiusY do
-		for dx=-BoxRadiusX,BoxRadiusX do
-			cell = {}
-			cell.x = 50+5*dx
-			cell.y = 70+5*dy
-			cell.value = network.neurons[i].value
-			cells[i] = cell
-			i = i + 1
-		end
-	end
-	
-	gui.drawBox(50-BoxRadiusX*5-3,70-BoxRadiusY*5-3,50+BoxRadiusX*5+2,70+BoxRadiusY*5+2,0xFF000000, 0x80808080)
-	for n,cell in pairs(cells) do
-		if n > Inputs or cell.value ~= 0 then
-			local color = math.floor((cell.value+1)/2*256)
-			if color > 255 then color = 255 end
-			if color < 0 then color = 0 end
-			local opacity = 0xFF000000
-			if cell.value == 0 then
-				opacity = 0x50000000
-			end
-			color = opacity + color*0x10000 + color*0x100 + color
-			gui.drawBox(cell.x-2,cell.y-2,cell.x+2,cell.y+2,opacity,color)
-		end
-	end
-	
-	XChange = ShiftX * 6
-	YChange = ShiftY * 5
-	gui.drawBox(49-XChange,72-YChange,55-XChange,78-YChange,0x00000000,0x80FF0000)
 end
 -------------------- END DEMO CODE ONLY -------------------------------------
 
