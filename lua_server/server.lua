@@ -200,7 +200,7 @@ function newInnovation()
 end
 
 function newPool()
-	print("CALLING NEWPOOL")
+	--print("CALLING NEWPOOL")
 	local pool = {}
 	pool.species = {}
 	pool.generation = 0
@@ -329,46 +329,6 @@ function generateNetwork(genome)
 	end
 	
 	genome.network = network
-end
-
-function evaluateNetwork(network, inputs)
-	table.insert(inputs, 1)
-
-	if #inputs ~= Inputs then
-		print("Incorrect number of neural network inputs.")
-		print(#inputs)
-		print(Inputs)
-		return {}
-	end
-	
-	for i=1,Inputs do
-		network.neurons[i].value = inputs[i]
-	end
-	
-	for _,neuron in pairs(network.neurons) do
-		local sum = 0
-		for j = 1,#neuron.incoming do
-			local incoming = neuron.incoming[j]
-			local other = network.neurons[incoming.into]
-			sum = sum + incoming.weight * other.value
-		end
-		
-		if #neuron.incoming > 0 then
-			neuron.value = sigmoid(sum)
-		end
-	end
-	
-	local outputs = {}
-	for o=1,Outputs do
-		local button = "P1 " .. ButtonNames[o]
-		if network.neurons[MaxNodes+o].value > 0 then
-			outputs[button] = true
-		else
-			outputs[button] = false
-		end
-	end
-	
-	return outputs
 end
 
 function crossover(g1, g2)
@@ -810,12 +770,10 @@ function newGeneration()
 	end
 	
 	pool.generation = pool.generation + 1
-	
-	writeFile("backup." .. pool.generation .. "." .. "NEW_GENERATION")
 end
 	
 function initializePool()
-	print("initializePool")
+	--print("initializePool")
 	pool = newPool()
 
 	for i=1,Population do
@@ -832,9 +790,9 @@ function initializeRun()
 	generateNetwork(genome)
 end
 
-print("is pool nil?")
+--print("is pool nil?")
 if pool == nil then
-	print("yup")
+	--print("yup")
 	initializePool()
 end
 
@@ -932,7 +890,7 @@ function resetMaxFitness()
 	pool.maxFitness = 0
 end
 
-print("writing temp.pool")
+--print("writing temp.pool")
 writeFile("temp.pool")
 clearLevels()
 
@@ -1129,8 +1087,6 @@ function getFitness(species, genome)
 
 				-- Is this a new client?
 				if not clients[clientId] then
-					stdscr:addstr("New client: " .. clientId)
-					stdscr:refresh()
 					clients[clientId] = {levelsPlayed = 0, framesPlayed = 0, staleLevels = 0}	
 				end
 
@@ -1181,7 +1137,7 @@ function getFitness(species, genome)
 			totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
 
 		else
-			print("Error: " .. err)
+			--print("Error: " .. err)
 		end
 
 		-- done with client, close the object
@@ -1193,7 +1149,7 @@ end
 
 -- Load backup if provided
 if #arg > 0 then
-	print("Loading backup: " .. arg[1])
+	--print("Loading backup: " .. arg[1])
 	loadFile(arg[1])
 end
 
@@ -1201,6 +1157,9 @@ end
 SAVE_EVERY = 25
 -- How many iterations ago we last saved
 lastSaved = 0
+
+-- The last generation we saved
+lastGenerationSaved = pool.generation
 
 while true do
 	local startTime = socket.gettime()
@@ -1235,6 +1194,13 @@ while true do
 		writeFile("backup.checkpoint")
 		lastSaved = 0
 		lastCheckpoint = os.date("%c", os.time())
+	end
+
+	-- Savea backup of the generation
+	
+	if lastGenerationSaved ~= pool.generation then
+		writeFile("backup." .. pool.generation .. "." .. "NEW_GENERATION")
+		lastGenerationSaved = pool.generation
 	end
 
 	local endTime = socket.gettime()
