@@ -1,5 +1,5 @@
-BoxRadiusX = 10 -- 6, 6, 2, 0
-BoxRadiusY = 10
+BoxRadiusX = 6 -- 6, 6, 2, 0
+BoxRadiusY = 6
 ShiftX = 2
 ShiftY = 2
 InputSize = (BoxRadiusX*2+1)*(BoxRadiusY*2+1)
@@ -145,8 +145,8 @@ function getInputs()
 	XStart = -(BoxRadiusX-ShiftX)*16
 	XEnd =    (BoxRadiusX+ShiftX)*16
 	
-	for dy=-(BoxRadiusY-ShiftY)*16,(BoxRadiusY+ShiftY)*16,16 do
-		for dx=-(BoxRadiusX-ShiftX)*16,(BoxRadiusX+ShiftX)*16,16 do
+	for dy=YStart,YEnd,16 do
+		for dx=XStart,XEnd,16 do
 			inputs[#inputs+1] = 0
 			
 			--print("dx: " .. dx .. " dy: " .. dy)
@@ -183,8 +183,8 @@ function getInputs()
 		end
 	end
 
-	--inputs[#inputs+1] = marioVX
-	--inputs[#inputs+1] = marioVY
+	inputs[#inputs+1] = marioVX
+	inputs[#inputs+1] = marioVY
 	
 	return inputs
 end
