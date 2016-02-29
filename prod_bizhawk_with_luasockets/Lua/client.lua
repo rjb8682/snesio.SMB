@@ -306,11 +306,16 @@ function evaluateCurrent(network)
 end
 
 function playGame(stateIndex, network)
-	local currentFrame = 0
 	savestate.load(stateIndex .. ".State")
+
+	-- Reset state
+	clearJoypad()
 	local progressTimeout = ProgressTimeoutConstant
 	local freezeTimeout = FreezeTimeoutConstant
 	local rightmost = 0
+	local currentFrame = 0
+	marioX = nil
+	marioY = nil
 
 	-- Play until we die / win
 	while true do
@@ -330,7 +335,7 @@ function playGame(stateIndex, network)
 			freezeTimeout = FreezeTimeoutConstant
 		end
 
-		fitness = rightmost - (currentFrame / 4)
+		local fitness = rightmost - (currentFrame / 4)
 
 		if config.drawGui == true then
 			gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
@@ -345,27 +350,30 @@ function playGame(stateIndex, network)
 
 		-- Check for death
 		if playerState == 6 or playerState == 0x0B or verticalScreenPosition > 1 then
-			if config.debug then console.writeline("Player Died") end
 			local reason = "enemyDeath"
 			if verticalScreenPosition > 1 then reason = "fell" end
+			if config.debug then console.writeline(reason) end
 			return rightmost, currentFrame, 0, reason, stateIndex
 		end
 
 		-- Did we win? (set in getPositions)
 		if wonLevel then
 			wonLevel = false
+			if config.debug then console.writeline("victory") end
 			return rightmost, currentFrame, 1, "victory", stateIndex
 		end
 
 		-- Check for freeze timeout
 		freezeTimeout = freezeTimeout - 1
 		if freezeTimeout <= 0 or fitness < -100 then
+			if config.debug then console.writeline("freeze") end
 			return rightmost, currentFrame, 0, "freeze", stateIndex
 		end
 
 		-- Check for progress timeout
 		progressTimeout = progressTimeout - 1
 		if progressTimeout <= 0 or fitness < -100 then
+			if config.debug then console.writeline("noProgress") end
 			return rightmost, currentFrame, 0, "noProgress", stateIndex
 		end
 		
@@ -416,8 +424,8 @@ function displayGenome(network)
 		end
 	end
 	
-	XChange = ShiftX * 6
-	YChange = ShiftY * 5
+	local XChange = ShiftX * 6
+	local YChange = ShiftY * 5
 	gui.drawBox(49-XChange,72-YChange,55-XChange,78-YChange,0x00000000,0x80FF0000)
 end
 
@@ -445,7 +453,6 @@ end
 
 -- Play demo mode if set (see top of file)
 if config.demoFile and config.demoFile ~= "" then
-	local demoNetwork = loadNetwork(config.demoFile)
 	percentage = "666" -- I hate globals...
 	currentGenome = config.demoFile
 	currentSpecies = config.demoFile
@@ -455,7 +462,7 @@ if config.demoFile and config.demoFile ~= "" then
 	while true do
 		-- Avoid castles and water levels
 		if z % 4 ~= 0 and z ~= 6 and z ~= 26 then
-			maxFitness = maxFitness + calculateDemoFitness(playGame(z, demoNetwork))
+			maxFitness = maxFitness + calculateDemoFitness(playGame(z, loadNetwork(config.demoFile)))
 		end
 
 		z = z + 1
@@ -468,14 +475,14 @@ if config.demoFile and config.demoFile ~= "" then
 end
 -------------------- END DEMO CODE ONLY -------------------------------------
 
--- Global so that we can re-use the network when possible
-network = nil
+-- Global so that we can re-use the network string when possible
+networkStr = nil
 
 -- loop forever waiting for games to play
 while true do
 	emu.frameadvance()
 
-	local toks, stateId, iterationId, ok, fitness
+	local toks, stateId, iterationId, ok
 
 	-- If the server responded with the next game from the previous iteration,
 	-- then use that rather than asking for another level.
@@ -510,12 +517,18 @@ while true do
 		-- The server won't re-send the network if we already have an up-to-date version
 		-- (based on the iterationId)
 		if toks[8] ~= "no_network" then
-			ok, network = serpent.load(toks[8])
+			networkStr = toks[8]
 			if config.debug then print("received new neural network") end
 		else
 			if config.debug then print("reusing neural network") end
 		end
 
+		-- Ensure the network is fresh by re-loading it from the string
+		local ok, network = serpent.load(networkStr)
+		if not ok then
+			print("Bad network returned. Aborting")
+			return
+		end
 		local dist, frames, wonLevel, reason = playGame(stateId, network)
 		if config.debug then print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason) end
 
@@ -550,6 +563,4 @@ while true do
 			print("err2: " .. err2)
 		end
 	end
-
-	collectgarbage()
 end
