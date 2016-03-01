@@ -1,6 +1,6 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local server = assert(socket.bind("*", 56506))
+local server = assert(socket.bind("*", 56507))
 local ip, port = server:getsockname()
 
 ---- Set up curses
@@ -65,7 +65,7 @@ levels = {
 clients = {}
 
 -- Keep track of the last TimeAverageSize times to keep a rolling average
-TimeAverageSize = 25
+TimeAverageSize = 100
 timeAverageIndex = 1
 timeAverages = {}
 for z = 1, TimeAverageSize do
@@ -171,24 +171,10 @@ StepSize = 0.1
 DisableMutationChance = 0.4
 EnableMutationChance = 0.2
 
-TimeoutConstant = 20
-
 WorldAugmenter = 0.2
 LevelAugmenter = 0.1
 
 MaxNodes = 1000000
-
-wonLevel = false
-
--- deleted getPositions
-
--- deleted getTile
-
--- deleted getSprites
-
--- deleted getExtendedSprites
-
--- deleted getInputs()
 
 function sigmoid(x)
 	return 2/(1+math.exp(-4.9*x))-1
@@ -890,11 +876,8 @@ function resetMaxFitness()
 	pool.maxFitness = 0
 end
 
---print("writing temp.pool")
 writeFile("temp.pool")
 clearLevels()
-
--- deleted playGame
 
 printf = function(s,...)
            return io.write(s:format(...))
@@ -1154,7 +1137,7 @@ if #arg > 0 then
 end
 
 -- How many iterations to wait before saving a checkpoint
-SAVE_EVERY = 25
+SAVE_EVERY = 100
 -- How many iterations ago we last saved
 lastSaved = 0
 
