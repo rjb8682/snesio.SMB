@@ -20,7 +20,7 @@ curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
 iteration = 0
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 6
+local VERSION_CODE = 7
 
 -- New field: totalFrames. TODO: consider using average frames over the last 100
 -- iterations for example. May not be worth the extra work, honestly. Even easier
@@ -70,24 +70,6 @@ timeAverageIndex = 1
 timeAverages = {}
 for z = 1, TimeAverageSize do
 	timeAverages[z] = 0
-end
-
-function nextUnfinishedLevel()
-	local i = levelIndex
-
-	for _ = 1, #levels do
-		-- Modify the order based on how long each level is
-		level = orderedLevels[i].index
-
-		if levels[level].active and levels[level].fitness == nil then
-			levelIndex = (i % #levels) + 1
-			return level
-		end
-
-		i = (i % #levels) + 1
-	end
-
-	return nil
 end
 
 function clearLevels()
@@ -154,7 +136,7 @@ Outputs = #ButtonNames
 
 compoundDistanceTraveled = 0
 
-Population = 300
+Population = 10
 DeltaDisjoint = 2.0
 DeltaWeights = 0.4
 DeltaThreshold = 1.0
@@ -782,6 +764,31 @@ if pool == nil then
 	initializePool()
 end
 
+function findNextNonRequestedGenome()
+	pool.currentSpecies = 1
+	pool.currentGenome = 1
+	local genome = pool.species[pool.currentSpecies].genomes[pool.currentGenome]
+
+	-- Advance past all requested and measured species.
+	while genome.fitness ~= 0 or genome.last_requested == pool.generation do
+		print(pool.currentSpecies .. " " .. pool.currentGenome)
+		pool.currentGenome = pool.currentGenome + 1
+		if pool.currentGenome > #pool.species[pool.currentSpecies].genomes then
+			pool.currentGenome = 1
+			pool.currentSpecies = pool.currentSpecies + 1
+			if pool.currentSpecies > #pool.species then
+				-- There were no un-requested genomes.
+				-- Do the normal loop instead (may trigger new generation)
+				pool.currentSpecies = 1
+				while fitnessAlreadyMeasured() do
+					nextGenome()
+				end
+				return
+			end
+		end
+		genome = pool.species[pool.currentSpecies].genomes[pool.currentGenome]
+	end
+end
 
 function nextGenome()
 	pool.currentGenome = pool.currentGenome + 1
@@ -803,32 +810,22 @@ function fitnessAlreadyMeasured()
 end
 
 function writeFile(filename)
-	local file = io.open("backups/" .. filename, "w")
-	file:write(serpent.dump(pool))
-	file:write("\n")
-	file:write(serpent.dump(levels))
-	file:write("\n")
-	file:write(serpent.dump(clients))
-        file:close()
+	-- TODO: turn on when ready
+	-- local file = io.open("backups/" .. filename, "w")
+	-- file:write(serpent.dump(pool))
+	-- file:write("\n")
+	-- file:write(serpent.dump(levels))
+	-- file:write("\n")
+	-- file:write(serpent.dump(clients))
+ --        file:close()
 end
 
 function writeNetwork(filename, network)
-    local file = io.open("backups/networks/" .. filename, "w")
-	file:write(serpent.dump(network))
-	file:write("\n")
-    file:close()
-end
-
-function loadNetwork(filename)
-	local file = io.open("backups/networks/" .. filename, "r")
-	local network = serpent.load(file:read("*line"))
-	file:close()
-	return network
-end
-
-function savePool()
-	local filename = "SERVER_BACKUP_3" 
-	writeFile(filename)
+	-- TODO: turn on when ready
+	-- local file = io.open("backups/networks/" .. filename, "w")
+	-- file:write(serpent.dump(network))
+	-- file:write("\n")
+	-- file:close()
 end
 
 function loadFile(filename)
@@ -838,7 +835,7 @@ function loadFile(filename)
 	ok3, clients = serpent.load(file:read("*line"))
 	file:close()
 	
-	-- TODO: is this necessary?
+	-- Find the next unmeasured genome
 	while fitnessAlreadyMeasured() do
 		nextGenome()
 	end
@@ -846,35 +843,6 @@ function loadFile(filename)
 	pool.currentFrame = pool.currentFrame + 1
 end
  
-function loadPool()
-	--local filename = forms.gettext(saveLoadFile)
-	--loadFile(filename)
-end
-
-function playTop()
-	local maxfitness = 0
-	local maxs, maxg
-	for s,species in pairs(pool.species) do
-		for g,genome in pairs(species.genomes) do
-			if genome.fitness > maxfitness then
-				maxfitness = genome.fitness
-				maxs = s
-				maxg = g
-			end
-		end
-	end
-	
-	pool.currentSpecies = maxs
-	pool.currentGenome = maxg
-	pool.maxFitness = maxfitness
-	initializeRun()
-	pool.currentFrame = pool.currentFrame + 1
-	return
-end
-
-function resetMaxFitness()
-	pool.maxFitness = 0
-end
 
 writeFile("temp.pool")
 clearLevels()
@@ -897,23 +865,26 @@ function printBoard(percentage)
 	stdscr:addstr("####################################################\n")
 
 	stdscr:addstr(string.format("| lvl | client        | reason     | fitness       |\n", i))
-	for i=1, #levels do
+	if not last_levels then
+		return
+	end
+	for i=1, #last_levels do
 		local world, level = getWorldAndLevel(i)
-		if levels[i].active then
-			if levels[i].fitness then
-				if levels[i].reason == "victory" then
+		if last_levels[i].active then
+			if last_levels[i].frames > 0 then
+				if last_levels[i].reason == "victory" then
 					stdscr:attron(curses.color_pair(1))
 				end
-				if levels[i].reason == "enemyDeath" then
+				if last_levels[i].reason == "enemyDeath" then
 					stdscr:attron(curses.color_pair(2))
 				end
 				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f | %5d ~ %8d\n", world,
 																							level,
-																							levels[i].lastRequester,
-																							levels[i].reason,
-																							levels[i].fitness,
-																							levels[i].timesWon,
-																							levels[i].totalFrames))
+																							last_levels[i].lastRequester,
+																							last_levels[i].reason,
+																							calculateFitness(last_levels[i], i),
+																							last_levels[i].timesWon,
+																							last_levels[i].totalFrames))
 
 				stdscr:attroff(curses.color_pair(1))
 				stdscr:attroff(curses.color_pair(2))
@@ -921,16 +892,16 @@ function printBoard(percentage)
 			else
 				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               | %5d ~ %8d\n", world,
 																									  level,
-																									  levels[i].lastRequester,
-																									  levels[i].timesWon,
-																									  levels[i].totalFrames))
+																									  last_levels[i].lastRequester,
+																									  last_levels[i].timesWon,
+																									  last_levels[i].totalFrames))
 			end
 		else
 			local fill = "-------------------------------------------------------"
-			if levels[i].kind == "water" then
+			if last_levels[i].kind == "water" then
 				fill = "             Oo~Oo~Oo~Oo~Oo~Oo~             "
 			else
-				if levels[i].kind == "castle" then
+				if last_levels[i].kind == "castle" then
 					fill = "______________[^]__[^__^]__[^]______________"
 				end
 			end
@@ -953,17 +924,6 @@ function printBoard(percentage)
 	stdscr:refresh()
 end
 
--- Returns an ordering through a table based on the totalFrames field
-function genOrderedIndex( t )
-    local orderedIndex = {}
-
-    for key, value in pairs(t) do
-        table.insert( orderedIndex, {index=key, t=value})
-    end
-    table.sort( orderedIndex, function(a, b) return a.t.totalFrames > b.t.totalFrames end)
-    return orderedIndex
-end
-
 function addTimeAverage(time)
 	timeAverages[timeAverageIndex] = time
 	timeAverageIndex = timeAverageIndex + 1
@@ -982,10 +942,10 @@ function getAverageTime()
 	return totalTime / numTimes
 end
 
-function calculateFitness(distance, frames, wonLevel, reason, stateIndex)
-	local result = distance
-	local timePenalty = frames / 10
-	if wonLevel == 1 then
+function calculateFitness(level, stateIndex)
+	local result = level.dist
+	local timePenalty = level.frames / 10
+	if level.wonLevel == 1 then
 		result = result + 5000
 	end
 
@@ -995,138 +955,27 @@ function calculateFitness(distance, frames, wonLevel, reason, stateIndex)
 	return 100 + (multi * result) - timePenalty
 end
 
--- loop forever waiting for clients
-function getFitness(species, genome)
-	clearLevels()
-	connectionCount = 0
-	totalTimeCommunicating = 0
-	totalTimeWaiting = 0
-
-	while true do
-
-		nextLevel = nextUnfinishedLevel()
-
-		-- Is this generation complete?
-		if nextLevel == nil then
-			-- Process results
-			local result = sumFitness()
-
-			-- Get new level
-			nextLevel = nextUnfinishedLevel()
-
-			-- Clear generation. Resets fitness + levelIndex + increments iterationId
-			clearLevels()
-
-			-- We're done!
-			return result
+function calculateTotalFitness(levels)
+	local sumFitness = 0
+	for stateIndex, level in pairs(levels) do
+		if level.active then
+			sumFitness = sumFitness + calculateFitness(level, stateIndex)
 		end
+	end
+	return sumFitness
+end
 
-		-- Not done. Wait for a connection from any client
-		local startTimeWaiting = socket.gettime()
-		local client = server:accept()
-		totalTimeWaiting = totalTimeWaiting + (socket.gettime() - startTimeWaiting)
-
-		-- Receive the line
-		local startTimeCommunicating = socket.gettime()
-		local line, err = client:receive()
-
-		connectionCount = connectionCount + 1
-
-		-- Was it good?
-		if not err then
-
-			toks = mysplit(line, "!")
-
-			-- Calculating percent of generation done
-			local measured = 0
-			local total = 0
-			for _,species in pairs(pool.species) do
-				for _,genome in pairs(species.genomes) do
-					total = total + 1
-					if genome.fitness ~= 0 then
-						measured = measured + 1
-					end
-				end
+function calculatePercentage()
+	-- Calculating percent of generation done
+	local measured = 0
+	local total = 0
+	for _,species in pairs(pool.species) do
+		for _,genome in pairs(species.genomes) do
+			total = total + 1
+			if genome.fitness ~= 0 then
+				measured = measured + 1
 			end
-
-			percentageFloat = (measured / total) * 100
-			percentage = math.floor(percentageFloat)
-
-			clientId = toks[1]
-
-			-- Should we re-send the network to the client?
-			local shouldResendNetwork = true
-
-			if #toks > 2 then
-				stateIndex = tonumber(toks[2])
-				iterationId = tonumber(toks[3])
-				distance = tonumber(toks[4])
-				frames = tonumber(toks[5])
-				wonLevel = tonumber(toks[6])
-				reason = toks[7]
-				versionCode = tonumber(toks[8])
-
-				fitnessResult = calculateFitness(distance, frames, wonLevel, reason, stateIndex)
-
-				-- Is this a new client?
-				if not clients[clientId] then
-					clients[clientId] = {levelsPlayed = 0, framesPlayed = 0, staleLevels = 0}	
-				end
-
-				-- Don't re-send the network if this client has the correct iterationId
-				if iterationId == iteration then
-					shouldResendNetwork = false
-				end
-
-				-- Only use fresh results from new clients (if we haven't already received this result)
-				if not levels[stateIndex].fitness
-					and iterationId == iteration
-					and versionCode == VERSION_CODE then
-					levels[stateIndex].fitness = fitnessResult
-					levels[stateIndex].totalFrames = levels[stateIndex].totalFrames + frames
-					levels[stateIndex].lastRequester = clientId
-					levels[stateIndex].reason = reason
-					levels[stateIndex].timesWon = levels[stateIndex].timesWon + wonLevel
-
-					-- Update client stats
-					clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
-					clients[clientId].framesPlayed = clients[clientId].framesPlayed + frames
-				else
-					-- Didn't make it in time--update stale counter
-					clients[clientId].staleLevels = clients[clientId].staleLevels + 1
-				end
-			end
-
-			-- Since we got a request, advance to the next level
-			if nextLevel then
-				local networkToSend = "no_network"
-				if shouldResendNetwork == true then -- TODO is == true necessary?
-					networkToSend = serpent.dump(genome.network)
-				end
-				local response = nextLevel .. "!" 
-								.. iteration .. "!" 
-								.. pool.generation .. "!" 
-								.. pool.currentSpecies .. "!" 
-								.. pool.currentGenome .. "!" 
-								.. math.floor(pool.maxFitness) .. "!" 
-								.. "(" .. percentage .. "%)!"
-								.. networkToSend .. "\n"
-				levels[nextLevel].lastRequester = clientId
-				client:send(response)
-			else 
-				client:send("no_level")
-			end
-
-			totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
-
-		else
-			--print("Error: " .. err)
 		end
-
-		-- done with client, close the object
-		client:close()
-
-		printBoard(percentageFloat)
 	end
 end
 
@@ -1144,27 +993,108 @@ lastSaved = 0
 -- The last generation we saved
 lastGenerationSaved = pool.generation
 
+pool.currentSpecies = 1
+pool.currentGenome = 1
+
+lastSumFitness = 0
+
+local connectionCount = 0
+local totalTimeWaiting = 0
+local totalTimeCommunicating = 0
+
+-- Global so we can print the last result easily
+last_levels = nil
+
 while true do
+	-- Find the first open, non-requested spot.
+	-- Returns a requested spot if all have been requested.
+	print("finding next genome!")
+	findNextNonRequestedGenome()
+
 	local startTime = socket.gettime()
 
 	initializeRun()
 
-	-- Sort the levels based on the total frames spent on each level.
-	-- (long levels get played first for optimal scheduling)
-	orderedLevels = genOrderedIndex(levels)
-
 	local species = pool.species[pool.currentSpecies]
 	local genome = species.genomes[pool.currentGenome]
 
-	-- This calls the clients
-	local fitness = getFitness(species, genome)
+	local startTimeWaiting = socket.gettime()
+	local client = server:accept()
+	totalTimeWaiting = totalTimeWaiting + (socket.gettime() - startTimeWaiting)
+	connectionCount = connectionCount + 1
 
-	lastSumFitness = fitness
-	genome.fitness = fitness
+	-- Receive the line
+	local startTimeCommunicating = socket.gettime()
+	local line, err = client:receive()
+
+	-- Was it good?
+	if not err then
+		toks = mysplit(line, "!")
+
+		clientId = toks[1]
+
+		if #toks > 2 then
+			local r_generation = tonumber(toks[2])
+			local r_species = tonumber(toks[3])
+			local r_genome = tonumber(toks[4])
+			local iterationId = tonumber(toks[5])
+			local versionCode = tonumber(toks[6])
+			local ok, r_levels = serpent.load(toks[7])
+
+			-- Is this a new client?
+			if not clients[clientId] then
+				clients[clientId] = {levelsPlayed = 0, framesPlayed = 0, staleLevels = 0}	
+			end
+
+			-- Only use fresh results from new clients (if we haven't already received this result)
+			if r_generation == pool.generation
+				and iterationId == iteration
+				and versionCode == VERSION_CODE
+				and pool.species[r_species].genomes[r_genome].fitness == 0 then
+				-- TODO process results function that does level stats etc
+				local fitnessResult = calculateTotalFitness(r_levels)
+				lastSumFitness = fitnessResult
+				local r_genome = pool.species[r_species].genomes[r_genome]
+				r_genome.fitness = fitnessResult
+
+				-- Update client stats
+				clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
+				clients[clientId].framesPlayed = clients[clientId].framesPlayed + 0--TODO frames
+
+				last_levels = r_levels
+			else
+				-- Didn't make it in time--update stale counter
+				clients[clientId].staleLevels = clients[clientId].staleLevels + 1
+			end
+		end
+
+		-- Send the next network to play
+		-- TODO: one table to rule them all
+		local response = serpent.dump(levels) .. "!" 
+						.. iteration .. "!" 
+						.. pool.generation .. "!" 
+						.. pool.currentSpecies .. "!" 
+						.. pool.currentGenome .. "!" 
+						.. math.floor(pool.maxFitness) .. "!" 
+						.. "(--%)!"
+						.. serpent.dump(genome.network) .. "\n"
+		--levels[nextLevel].lastRequester = clientId
+		client:send(response)
+		genome.last_requested = pool.generation
+
+		totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
+	else
+		--print("Error: " .. err)
+	end
+
+	-- done with client, close the object
+	client:close()
+
+	printBoard(0.0)
 	
 	-- Make backups if we beat the current best	
-	if fitness > pool.maxFitness then
-		pool.maxFitness = fitness
+	if lastSumFitness > pool.maxFitness then
+		pool.maxFitness = lastSumFitness
 		--forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
 		writeFile("backup." .. pool.generation .. ".NEW_BEST")
 		writeNetwork("backup_network.fitness" .. pool.maxFitness .. ".gen" .. pool.generation .. ".genome" .. pool.currentGenome .. ".species" .. pool.currentSpecies .. ".NEW_BEST", genome.network)
@@ -1203,10 +1133,4 @@ while true do
 
 	-- Refresh to show the iteration time + our last checkpoint
 	stdscr:refresh()
-
-	pool.currentSpecies = 1
-	pool.currentGenome = 1
-	while fitnessAlreadyMeasured() do
-		nextGenome()
-	end
 end
