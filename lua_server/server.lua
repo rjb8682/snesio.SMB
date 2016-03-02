@@ -20,44 +20,44 @@ curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
 iteration = 0
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 7
+local VERSION_CODE = 8
 
 -- New field: totalFrames. TODO: consider using average frames over the last 100
 -- iterations for example. May not be worth the extra work, honestly. Even easier
 -- is resetting totalFrames every so often for a similar effect.
 levels = {
-	{active = true, kind = "land"},  -- 1-1
-	{active = true, kind = "land"},  -- 1-2
-	{active = true, kind = "land"},  -- 1-3
-	{active = false, kind = "castle"}, -- 1-4, castle
-	{active = true, kind = "land"},  -- 2-1
-	{active = false, kind = "water"}, -- 2-2, water level
-	{active = true, kind = "land"},  -- 2-3
-	{active = false, kind = "castle"}, -- 2-4, castle
-	{active = true, kind = "land"},  -- 3-1
-	{active = true, kind = "land"},  -- 3-2
-	{active = true, kind = "land"},  -- 3-3
-	{active = false, kind = "castle"}, -- 3-4, castle
-	{active = true, kind = "land"},  -- 4-1
-	{active = true, kind = "land"},  -- 4-2
-	{active = true, kind = "land"},  -- 4-3
-	{active = false, kind = "castle"}, -- 4-4, castle
-	{active = true, kind = "land"},  -- 5-1
-	{active = true, kind = "land"},  -- 5-2,
-	{active = true, kind = "land"},  -- 5-3
-	{active = false, kind = "castle"}, -- 5-4, castle
-	{active = true, kind = "land"},  -- 6-1
-	{active = true, kind = "land"},  -- 6-2
-	{active = true, kind = "land"},  -- 6-3
-	{active = false, kind = "castle"}, -- 6-4, castle
-	{active = true, kind = "land"},  -- 7-1
-	{active = false, kind = "water"}, -- 7-2, water level
-	{active = true, kind = "land"},  -- 7-3
-	{active = false, kind = "castle"}, -- 7-4, castle
-	{active = true, kind = "land"},  -- 8-1
-	{active = true, kind = "land"},  -- 8-2
-	{active = true, kind = "land"},  -- 8-3
-	{active = false, kind = "castle"}  -- 8-4, castle
+	{a = true},  -- 1-1
+	{a = true},  -- 1-2
+	{a = true},  -- 1-3
+	{a = false}, -- 1-4, castle
+	{a = true},  -- 2-1
+	{a = false}, -- 2-2, water level
+	{a = true},  -- 2-3
+	{a = false}, -- 2-4, castle
+	{a = true},  -- 3-1
+	{a = true},  -- 3-2
+	{a = true},  -- 3-3
+	{a = false}, -- 3-4, castle
+	{a = true},  -- 4-1
+	{a = true},  -- 4-2
+	{a = true},  -- 4-3
+	{a = false}, -- 4-4, castle
+	{a = true},  -- 5-1
+	{a = true},  -- 5-2,
+	{a = true},  -- 5-3
+	{a = false}, -- 5-4, castle
+	{a = true},  -- 6-1
+	{a = true},  -- 6-2
+	{a = true},  -- 6-3
+	{a = false}, -- 6-4, castle
+	{a = true},  -- 7-1
+	{a = false}, -- 7-2, water level
+	{a = true},  -- 7-3
+	{a = false}, -- 7-4, castle
+	{a = true},  -- 8-1
+	{a = true},  -- 8-2
+	{a = true},  -- 8-3
+	{a = false}  -- 8-4, castle
 }
 
 -- This table keeps track of how many results + frames each client has returned
@@ -74,16 +74,28 @@ end
 
 function clearLevels()
 	for i = 1, #levels, 1 do
-		if not levels[i].timesWon then
-			levels[i].timesWon = 0
+		if not levels[i].d then
+			levels[i].d = 0
 		end
+		if not levels[i].f then
+			levels[i].f = 0
+		end
+		if not levels[i].d then
+			levels[i].w = 0
+		end
+		if not levels[i].f then
+			levels[i].r = ""
+		end
+		-- if not levels[i].timesWon then
+		-- 	levels[i].timesWon = 0
+		-- end
 
-		if not levels[i].totalFrames then
-			levels[i].totalFrames = 0
-		end
-		levels[i].fitness = nil
-		levels[i].lastRequester = ""
-		levels[i].reason = ""
+		-- if not levels[i].totalFrames then
+		-- 	levels[i].totalFrames = 0
+		-- end
+		-- levels[i].fitness = nil
+		-- levels[i].lastRequester = ""
+		-- levels[i].reason = ""
 	end
 	levelIndex = 1
 	iteration = iteration + 1
@@ -99,7 +111,7 @@ end
 function sumFitness()
 	local result = 0
 	for i = 1, #levels do
-		if levels[i].active then
+		if levels[i].a then
 			result = result + levels[i].fitness
 		end
 	end
@@ -118,12 +130,8 @@ function mysplit(inputstr, sep)
 	return t
 end
 
-Filename = "1.State"
 ButtonNames = {
 	"A",
-	--"B",
-	--"Up",
-	--"Down",
 	"Left",
 	"Right",
 }
@@ -134,9 +142,7 @@ InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 Inputs = InputSize + 3
 Outputs = #ButtonNames
 
-compoundDistanceTraveled = 0
-
-Population = 10
+Population = 300
 DeltaDisjoint = 2.0
 DeltaWeights = 0.4
 DeltaThreshold = 1.0
@@ -771,7 +777,6 @@ function findNextNonRequestedGenome()
 
 	-- Advance past all requested and measured species.
 	while genome.fitness ~= 0 or genome.last_requested == pool.generation do
-		print(pool.currentSpecies .. " " .. pool.currentGenome)
 		pool.currentGenome = pool.currentGenome + 1
 		if pool.currentGenome > #pool.species[pool.currentSpecies].genomes then
 			pool.currentGenome = 1
@@ -811,21 +816,21 @@ end
 
 function writeFile(filename)
 	-- TODO: turn on when ready
-	-- local file = io.open("backups/" .. filename, "w")
-	-- file:write(serpent.dump(pool))
-	-- file:write("\n")
-	-- file:write(serpent.dump(levels))
-	-- file:write("\n")
-	-- file:write(serpent.dump(clients))
- --        file:close()
+	local file = io.open("backups_massively_parallel/" .. filename, "w")
+	file:write(serpent.dump(pool))
+	file:write("\n")
+	file:write(serpent.dump(levels))
+	file:write("\n")
+	file:write(serpent.dump(clients))
+    file:close()
 end
 
 function writeNetwork(filename, network)
 	-- TODO: turn on when ready
-	-- local file = io.open("backups/networks/" .. filename, "w")
-	-- file:write(serpent.dump(network))
-	-- file:write("\n")
-	-- file:close()
+	local file = io.open("backups_massively_parallel/networks" .. filename, "w")
+	file:write(serpent.dump(network))
+	file:write("\n")
+	file:close()
 end
 
 function loadFile(filename)
@@ -856,9 +861,9 @@ lastSumFitness = 0
 function printBoard(percentage)
 	-- Print previous results
 	stdscr:mvaddstr(0,0,"####################################################\n")
-	stdscr:addstr(string.format("#      gen %3d species %3d genome %3d (%3.1f%%)      #\n",   pool.generation,
-																					pool.currentSpecies,
-																					pool.currentGenome,
+	stdscr:addstr(string.format("#      gen %3d species %3d genome %3d (%3.1f%%)      #\n",   last_generation,
+																					last_species,
+																					last_genome,
 																					percentage))
 	stdscr:addstr(string.format("#       fitness: %6d  max fitness: %6d       #\n", math.floor(lastSumFitness),
 																					math.floor(pool.maxFitness)))
@@ -870,40 +875,35 @@ function printBoard(percentage)
 	end
 	for i=1, #last_levels do
 		local world, level = getWorldAndLevel(i)
-		if last_levels[i].active then
-			if last_levels[i].frames > 0 then
-				if last_levels[i].reason == "victory" then
+		if last_levels[i].a then
+			if last_levels[i].f > 0 then
+				if last_levels[i].r == "victory" then
 					stdscr:attron(curses.color_pair(1))
 				end
-				if last_levels[i].reason == "enemyDeath" then
+				if last_levels[i].r == "enemyDeath" then
 					stdscr:attron(curses.color_pair(2))
 				end
-				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f | %5d ~ %8d\n", world,
+				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f |\n", world,
 																							level,
-																							last_levels[i].lastRequester,
-																							last_levels[i].reason,
-																							calculateFitness(last_levels[i], i),
-																							last_levels[i].timesWon,
-																							last_levels[i].totalFrames))
+																							"todo",
+																							last_levels[i].r,
+																							calculateFitness(last_levels[i], i)))
 
 				stdscr:attroff(curses.color_pair(1))
 				stdscr:attroff(curses.color_pair(2))
 
 			else
-				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               | %5d ~ %8d\n", world,
+				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               |\n", world,
 																									  level,
-																									  last_levels[i].lastRequester,
-																									  last_levels[i].timesWon,
-																									  last_levels[i].totalFrames))
+																									  "todo"))
 			end
 		else
 			local fill = "-------------------------------------------------------"
-			if last_levels[i].kind == "water" then
+			-- Castle levels get special treatment
+			if i % 4 == 0 then
 				fill = "             Oo~Oo~Oo~Oo~Oo~Oo~             "
-			else
-				if last_levels[i].kind == "castle" then
-					fill = "______________[^]__[^__^]__[^]______________"
-				end
+			else -- Otherwise, assume water
+				fill = "______________[^]__[^__^]__[^]______________"
 			end
 			stdscr:addstr(string.format("| %1d-%1d |%30s|\n", world, level, fill))
 		end
@@ -943,9 +943,9 @@ function getAverageTime()
 end
 
 function calculateFitness(level, stateIndex)
-	local result = level.dist
-	local timePenalty = level.frames / 10
-	if level.wonLevel == 1 then
+	local result = level.d
+	local timePenalty = level.f / 10
+	if level.w == 1 then
 		result = result + 5000
 	end
 
@@ -958,7 +958,7 @@ end
 function calculateTotalFitness(levels)
 	local sumFitness = 0
 	for stateIndex, level in pairs(levels) do
-		if level.active then
+		if level.a then
 			sumFitness = sumFitness + calculateFitness(level, stateIndex)
 		end
 	end
@@ -977,6 +977,7 @@ function calculatePercentage()
 			end
 		end
 	end
+	return (measured / total) * 100
 end
 
 -- Load backup if provided
@@ -1004,12 +1005,15 @@ local totalTimeCommunicating = 0
 
 -- Global so we can print the last result easily
 last_levels = nil
+last_generation = -1
+last_species = -1
+last_genome = -1
 
 while true do
 	-- Find the first open, non-requested spot.
 	-- Returns a requested spot if all have been requested.
-	print("finding next genome!")
 	findNextNonRequestedGenome()
+	local percentage = calculatePercentage()
 
 	local startTime = socket.gettime()
 
@@ -1054,14 +1058,16 @@ while true do
 				-- TODO process results function that does level stats etc
 				local fitnessResult = calculateTotalFitness(r_levels)
 				lastSumFitness = fitnessResult
-				local r_genome = pool.species[r_species].genomes[r_genome]
-				r_genome.fitness = fitnessResult
+				pool.species[r_species].genomes[r_genome].fitness = fitnessResult
 
 				-- Update client stats
 				clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
 				clients[clientId].framesPlayed = clients[clientId].framesPlayed + 0--TODO frames
 
 				last_levels = r_levels
+				last_generation = r_generation
+				last_species = r_species
+				last_genome = r_genome
 			else
 				-- Didn't make it in time--update stale counter
 				clients[clientId].staleLevels = clients[clientId].staleLevels + 1
@@ -1076,7 +1082,7 @@ while true do
 						.. pool.currentSpecies .. "!" 
 						.. pool.currentGenome .. "!" 
 						.. math.floor(pool.maxFitness) .. "!" 
-						.. "(--%)!"
+						.. "(" .. percentage .. "%)!"
 						.. serpent.dump(genome.network) .. "\n"
 		--levels[nextLevel].lastRequester = clientId
 		client:send(response)
@@ -1090,7 +1096,7 @@ while true do
 	-- done with client, close the object
 	client:close()
 
-	printBoard(0.0)
+	printBoard(percentage)
 	
 	-- Make backups if we beat the current best	
 	if lastSumFitness > pool.maxFitness then
