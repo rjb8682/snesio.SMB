@@ -2,7 +2,7 @@ local serpent = require("serpent")
 local socket = require("socket")
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 7
+local VERSION_CODE = 8
 
 function initConfigFile()
 	-- Set default config file state here
@@ -517,16 +517,16 @@ while true do
 
 		-- Play all requested levels
 		for stateId, level in pairs(levels) do
-			if level.active then
+			if level.a then
 				-- Ensure the network is fresh by re-loading it from the string
 				-- TODO: explore ways to reset it robustly?
 				local ok, network = serpent.load(networkStr)
 				local dist, frames, wonLevel, reason = playGame(stateId, network)
 				if config.debug then print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason) end
-				level.dist = dist
-				level.frames = frames
-				level.wonLevel = wonLevel
-				level.reason = reason
+				level.d = dist
+				level.f = frames
+				level.w = wonLevel
+				level.r = reason
 			end
 		end
 
