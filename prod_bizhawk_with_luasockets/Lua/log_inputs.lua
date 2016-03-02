@@ -1,3 +1,11 @@
+-- log_inputs.lua
+-- Authors: Zach Lauzon, Robert Bond III, Nic Manoogian
+-- This script is meant to be run from the BizHawk Lua console.
+-- It will read the game's RAM in order to extract features
+-- for use by a neural network.
+
+local serpent = require("serpent")
+local socket = require("socket")
 BoxRadiusX = 6 -- 6, 6, 2, 0
 BoxRadiusY = 6
 ShiftX = 2
@@ -7,7 +15,7 @@ InputSize = (BoxRadiusX*2+1)*(BoxRadiusY*2+1)
 -- How many pixels away (manhattan distance) to check for an enemy
 EnemyTolerance = 8
 
-Inputs = InputSize + 3 -- marioVX, marioVY, BIAS NEURON
+Inputs = InputSize + 2 -- marioVX, marioVY
 
 -- Tile types
 BOTTOM_TILE = 84
@@ -29,108 +37,85 @@ HAMMER_STATUS_START = 0x002A
 HAMMER_STATUS_END = 0x0032
 HAMMER_HITBOXES = 0x04D0
 
-function mysplit(inputstr, sep)
-	if sep == nil then
-		sep = "%s"
-	end
-	local t={}; i=1
-	for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
-		t[i] = str
-		i = i + 1
-	end
-	return t
-end
 
 function getPositions()
-	if gameinfo.getromname() == "Super Mario Bros." then
-		oldMarioX = marioX
-		oldMarioY = marioY
-		marioX = memory.readbyte(0x6D) * 0x100 + memory.readbyte(0x86)
-		marioY = memory.readbyte(0x03B8)+16
+	oldMarioX = marioX
+	oldMarioY = marioY
+	marioX = memory.readbyte(0x6D) * 0x100 + memory.readbyte(0x86)
+	marioY = memory.readbyte(0x03B8)+16
 
-		playerFloatState = memory.readbyte(0x1D)
-		if playerFloatState == 3 then
-			wonLevel = true
-		end
-		playerState = memory.readbyte(0x000E)
-
-		verticalScreenPosition = memory.readbyte(0x00B5)
-
-		marioCurX = memory.readbyte(0x0086)
-		marioCurY = memory.readbyte(0x03B8)
-		marioVX = memory.read_s8(0x0057)
-		marioVY = memory.read_s8(0x009F)
-
-		marioWorld = memory.read_s8(0x075F)
-		marioLevel = memory.read_s8(0x0760)
-	
-		screenX = memory.readbyte(0x03AD)
-		screenY = memory.readbyte(0x03B8)
-
-		-- print("marioCurX: " .. marioCurX .. " marioCurY: " .. marioCurY)
-		-- print("marioX: " .. marioX .. " marioY: " .. marioY)
-		-- print("screenX: " .. screenX .. " screenY: " .. screenY)
+	playerFloatState = memory.readbyte(0x1D)
+	if playerFloatState == 3 then
+		wonLevel = true
 	end
+	playerState = memory.readbyte(0x000E)
+
+	verticalScreenPosition = memory.readbyte(0x00B5)
+
+	marioCurX = memory.readbyte(0x0086)
+	marioCurY = memory.readbyte(0x03B8)
+	marioVX = memory.read_s8(0x0057)
+	marioVY = memory.read_s8(0x009F)
+
+	marioWorld = memory.read_s8(0x075F)
+	marioLevel = memory.read_s8(0x0760)
+
+	screenX = memory.readbyte(0x03AD)
+	screenY = memory.readbyte(0x03B8)
 end
 
 function getTile(dx, dy)
-	if gameinfo.getromname() == "Super Mario Bros." then
-		local x = marioX + dx + 8
-		local y = marioY + dy - 16
-		local page = math.floor(x/256)%2
+	local x = marioX + dx + 8
+	local y = marioY + dy - 16
+	local page = math.floor(x/256)%2
 
-		local subx = math.floor((x%256)/16)
-		local suby = math.floor((y - 32)/16)
-		local addr = 0x500 + page*13*16+suby*16+subx
-		
-		if suby >= 13 or suby < 0 then
-			return 0
-		end
-		
-		tile = memory.readbyte(addr)
-		-- Don't let Mario see coins.
-		if tile ~= 0 and tile ~= COIN then
-			--print(tostring(x) .. ", " .. tostring(y) .. ": " .. tostring(memory.readbyte(addr)))
-			return 1
-		else
-			return 0
-		end
+	local subx = math.floor((x%256)/16)
+	local suby = math.floor((y - 32)/16)
+	local addr = 0x500 + page*13*16+suby*16+subx
+	
+	if suby >= 13 or suby < 0 then
+		return 0
+	end
+	
+	tile = memory.readbyte(addr)
+	-- Don't let Mario see coins.
+	if tile ~= 0 and tile ~= COIN then
+		--print(tostring(x) .. ", " .. tostring(y) .. ": " .. tostring(memory.readbyte(addr)))
+		return 1
+	else
+		return 0
 	end
 end
 
 function getSprites()
-	--print("-----sprites--------")
-	if gameinfo.getromname() == "Super Mario Bros." then
-		local sprites = {}
-		for slot=0,4 do -- TODO SHOULDNT THIS BE 5?!
-			local enemy = memory.readbyte(0xF+slot)
-			local enemyType = memory.readbyte(ENEMY_TYPES + slot)
-			if enemy ~= 0 then
-				local ex = memory.readbyte(0x6E + slot)*0x100 + memory.readbyte(0x87+slot)
-				local ey = memory.readbyte(0xCF + slot)+24
-				--print(enemyType .. ": " .. ex .. ", " .. ey)
-				sprites[#sprites+1] = {x=ex,y=ey,t=enemyType}
-			end
+	local sprites = {}
+
+	-- Find all enemy sprites.
+	for slot=0,4 do -- TODO: Shouldn't this be 5?
+		local enemy = memory.readbyte(0xF+slot)
+		local enemyType = memory.readbyte(ENEMY_TYPES + slot)
+		if enemy ~= 0 then
+			local ex = memory.readbyte(0x6E + slot)*0x100 + memory.readbyte(0x87+slot)
+			local ey = memory.readbyte(0xCF + slot)+24
+			sprites[#sprites+1] = {x=ex,y=ey,t=enemyType}
 		end
-		--print("------hammers-------")
-		for addr=HAMMER_STATUS_START,HAMMER_STATUS_END do
-			local hammerSlot = memory.readbyte(addr)
-			-- Is this hammer active?
-			if hammerSlot ~= 0 then
-				hammerAddr = HAMMER_HITBOXES + 4 * (addr - HAMMER_STATUS_START)
-				--print("slot: " .. hammerSlot .. " addr: " .. hammerAddr)
-				-- Take the center of the hitbox
-				local cx = (memory.readbyte(hammerAddr + 0)
-					      + memory.readbyte(hammerAddr + 2) + 0.5) / 2
-				local cy = (memory.readbyte(hammerAddr + 1) +
-					        memory.readbyte(hammerAddr + 3) + 0.5) / 2
-				--print(hammerSlot .. ": " .. (cx - marioCurX) .. ", " .. (cy - marioCurY))
-				sprites[#sprites+1] = {x=cx,y=cy,t=HAMMER_TYPE}
-			end
-		end
-		
-		return sprites
 	end
+
+	-- Find all hammer sprites.
+	for addr=HAMMER_STATUS_START,HAMMER_STATUS_END do
+		local hammerSlot = memory.readbyte(addr)
+		-- Is this hammer active?
+		if hammerSlot ~= 0 then
+			hammerAddr = HAMMER_HITBOXES + 4 * (addr - HAMMER_STATUS_START)
+			-- Take the center of the hitbox
+			local cx = (memory.readbyte(hammerAddr + 0)
+				      + memory.readbyte(hammerAddr + 2) + 0.5) / 2
+			local cy = (memory.readbyte(hammerAddr + 1) +
+				        memory.readbyte(hammerAddr + 3) + 0.5) / 2
+			sprites[#sprites+1] = {x=cx,y=cy,t=HAMMER_TYPE}
+		end
+	end
+	return sprites
 end
 
 function getInputs()
@@ -149,20 +134,18 @@ function getInputs()
 		for dx=XStart,XEnd,16 do
 			inputs[#inputs+1] = 0
 			
-			--print("dx: " .. dx .. " dy: " .. dy)
 			for i = 1,#sprites do
 				-- Lifts are sprites, but not enemies. Make them a 1.
-				-- TODO: Trampolines??
+				-- TODO: Trampolines?
 				if sprites[i].t == HAMMER_TYPE then
 					-- Hammers are relative on the screen, but use an axis starting at 0
+					-- TODO: consider using cartesian distance rather than Manhattan
 					distx = math.abs(sprites[i].x - screenX - (dx-8)) -- was 8
 					disty = math.abs(sprites[i].y - screenY - (dy-8)) -- was 8
-					--print("H -> x: " .. sprites[i].x .. " y: " .. sprites[i].y .. " distx: " .. distx .. " disty: " .. disty)
 				else
 					-- Otherwise, calculate relative to start of level
 					distx = math.abs(sprites[i].x - (marioX+dx-8))
 					disty = math.abs(sprites[i].y - (marioY+dy-8))
-					--print("* -> distx: " .. distx .. " disty: " .. disty)
 				end
 				if distx <= EnemyTolerance and disty <= EnemyTolerance then
 					if sprites[i].t >= LIFT_START and sprites[i].t < LIFT_END then
@@ -224,8 +207,23 @@ function displayGenome(inputs)
 	gui.drawBox(49-XChange,72-YChange,55-XChange,78-YChange,0x00000000,0x80FF0000)
 end
 
+inputList = {}
 while true do
 	inputs = getInputs()
+	table.insert(inputList, inputs)
 	displayGenome(inputs)
+
+	-- Dump file once level is won
+	if wonLevel then
+		local file = io.open("inputDumps/" .. tostring(socket.gettime()) .. ".csv", "w")
+		for k, v in pairs(inputList) do
+			file:write(table.concat(v, ","))
+			file:write("\n")
+		end
+        file:close()
+		inputList = {}
+        wonLevel = false
+	end
+
 	emu.frameadvance();
 end
