@@ -2,7 +2,7 @@ local serpent = require("serpent")
 local socket = require("socket")
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 8
+local VERSION_CODE = 6
 
 function initConfigFile()
 	-- Set default config file state here
@@ -482,7 +482,7 @@ networkStr = nil
 while true do
 	emu.frameadvance()
 
-	local toks, iterationId, ok
+	local toks, stateId, iterationId, ok
 
 	-- If the server responded with the next game from the previous iteration,
 	-- then use that rather than asking for another level.
@@ -506,40 +506,40 @@ while true do
 	if response then
 		toks = mysplit(response, "!")
 		response = nil -- Delete response so we don't re-play the level
-		ok, levels = serpent.load(toks[1])
+		stateId = toks[1]
 		iterationId = toks[2]
 		generation = toks[3]
 		currentSpecies = toks[4]
 		currentGenome = toks[5]
 		maxFitness = toks[6]
 		percentage = toks[7]
-		networkStr = toks[8]
 
-		-- Play all requested levels
-		for stateId, level in pairs(levels) do
-			if level.a then
-				-- Ensure the network is fresh by re-loading it from the string
-				-- TODO: explore ways to reset it robustly?
-				local ok, network = serpent.load(networkStr)
-				local dist, frames, wonLevel, reason = playGame(stateId, network)
-				if config.debug then print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason) end
-				level.d = dist
-				level.f = frames
-				level.w = wonLevel
-				level.r = reason
-			end
+		-- The server won't re-send the network if we already have an up-to-date version
+		-- (based on the iterationId)
+		if toks[8] ~= "no_network" then
+			networkStr = toks[8]
+			if config.debug then print("received new neural network") end
+		else
+			if config.debug then print("reusing neural network") end
 		end
 
-		-- Send it back yo
-		-- TODO just put it all in levels table
-		local results_to_send = config.clientId .. "!"
-				.. generation .. "!"
-				.. currentSpecies .. "!"
-				.. currentGenome .. "!"
-				.. iterationId .. "!" 
-				.. VERSION_CODE .. "!"
-			    .. serpent.dump(levels) .. "\n"
+		-- Ensure the network is fresh by re-loading it from the string
+		local ok, network = serpent.load(networkStr)
+		if not ok then
+			print("Bad network returned. Aborting")
+			return
+		end
+		local dist, frames, wonLevel, reason = playGame(stateId, network)
+		if config.debug then print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason) end
 
+		-- Send it back yo
+		local results_to_send = config.clientId .. "!" .. stateId .. "!"
+				.. iterationId .. "!" 
+			    .. dist .. "!"
+			    .. frames .. "!"
+			    .. wonLevel .. "!"
+			    .. reason .. "!"
+			    .. VERSION_CODE .. "\n"
 		local client2, err2 = socket.connect(config.server, config.port)
 		if not err2 then
 			client2:send(results_to_send)
