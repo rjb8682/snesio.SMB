@@ -1,0 +1,14 @@
+Have each client maintain a UDP mailbox
+The server can issue a "stop" message by dropping a bit in these mailboxes
+That way we can avoid all clients checking in a stale result (20 seconds wasted for each client that didn't win the race)
+
+Each client writes a "dont_kill_me" file while they're playing a level
+Delete the file once results are checked in
+Use presence of this file to avoid killing the clients at a bad time (otherwise, waste 10s per 300s)
+Alternatively, write a file whose name is a timestamp
+Killscript only kills if it started within N seconds
+(this is bad because it allows stale results)
+The kill script could write a file to send a warning to the clients!
+That way the client doesn't request a new level when it's about to be killed (two-way comunication)
+
+
