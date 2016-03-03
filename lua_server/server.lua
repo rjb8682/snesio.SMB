@@ -770,9 +770,10 @@ if pool == nil then
 	initializePool()
 end
 
+-- TODO: make sure we don't send a genome if we just got that genome's results!!
 function findNextNonRequestedGenome()
-	pool.currentSpecies = 1
-	pool.currentGenome = 1
+	--pool.currentSpecies = 1
+	--pool.currentGenome = 1
 	local genome = pool.species[pool.currentSpecies].genomes[pool.currentGenome]
 
 	-- Advance past all requested and measured species.
@@ -788,6 +789,10 @@ function findNextNonRequestedGenome()
 				while fitnessAlreadyMeasured() do
 					nextGenome()
 				end
+
+				-- We're now at the first unfinished result. Remember this
+				--pool.nextSpecies = pool.currentSpecies
+				--pool.nextGenome = pool.currentGenome
 				return
 			end
 		end
@@ -827,14 +832,14 @@ end
 
 function writeNetwork(filename, network)
 	-- TODO: turn on when ready
-	local file = io.open("backups_massively_parallel/networks" .. filename, "w")
+	local file = io.open("backups_massively_parallel/networks/" .. filename, "w")
 	file:write(serpent.dump(network))
 	file:write("\n")
 	file:close()
 end
 
 function loadFile(filename)
-	local file = io.open("backups/" .. filename, "r")
+	local file = io.open("backups_massively_parallel/" .. filename, "r")
 	ok1, pool   = serpent.load(file:read("*line"))
 	ok2, levels = serpent.load(file:read("*line"))
 	ok3, clients = serpent.load(file:read("*line"))
@@ -956,13 +961,13 @@ function calculateFitness(level, stateIndex)
 end
 
 function calculateTotalFitness(levels)
-	local sumFitness = 0
+	local total = 0
 	for stateIndex, level in pairs(levels) do
 		if level.a then
-			sumFitness = sumFitness + calculateFitness(level, stateIndex)
+			total = total + calculateFitness(level, stateIndex)
 		end
 	end
-	return sumFitness
+	return total
 end
 
 function calculatePercentage()
@@ -1068,6 +1073,7 @@ while true do
 				last_generation = r_generation
 				last_species = r_species
 				last_genome = r_genome
+				last_network = pool.species[r_species].genomes[r_genome].network
 			else
 				-- Didn't make it in time--update stale counter
 				clients[clientId].staleLevels = clients[clientId].staleLevels + 1
@@ -1101,9 +1107,8 @@ while true do
 	-- Make backups if we beat the current best	
 	if lastSumFitness > pool.maxFitness then
 		pool.maxFitness = lastSumFitness
-		--forms.settext(maxFitnessLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
-		writeFile("backup." .. pool.generation .. ".NEW_BEST")
-		writeNetwork("backup_network.fitness" .. pool.maxFitness .. ".gen" .. pool.generation .. ".genome" .. pool.currentGenome .. ".species" .. pool.currentSpecies .. ".NEW_BEST", genome.network)
+		writeFile("backup." .. last_generation .. ".NEW_BEST")
+		writeNetwork("backup_network.fitness" .. pool.maxFitness .. ".gen" .. last_generation .. ".genome" .. last_genome .. ".species" .. last_species .. ".NEW_BEST", last_network)
 	end
 
 	-- Save a checkpoint if necessary
