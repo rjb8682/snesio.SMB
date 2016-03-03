@@ -11,4 +11,4 @@ Killscript only kills if it started within N seconds
 The kill script could write a file to send a warning to the clients!
 That way the client doesn't request a new level when it's about to be killed (two-way comunication)
 
-
+Explore the effects of how much variable name length affects communication time (specifically in the neural network)
