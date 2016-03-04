@@ -23,3 +23,6 @@ would be great for historical playback + diffing networks
 60kb * 300 = 1.8mb per generation. Not the worst. Could save representative sample (>= average)
 
 Run server with LuaJIT! Supposed to be significantly faster than 5.1.
+
+Calculate a "frames checked in per second metric"
+(average of time since last result * total frames spent playing all 22 levels)
