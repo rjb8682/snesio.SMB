@@ -12,3 +12,7 @@ The kill script could write a file to send a warning to the clients!
 That way the client doesn't request a new level when it's about to be killed (two-way comunication)
 
 Explore the effects of how much variable name length affects communication time (specifically in the neural network)
+
+Let's graph the neural networks! This would be great to have on the website
+
+Create a "diff" between the last best network and the current best: *why* did the new one perform better? Victories, frames, distance, per level basis (22 rows)
