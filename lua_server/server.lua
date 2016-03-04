@@ -60,6 +60,8 @@ levels = {
 	{a = false}  -- 8-4, castle
 }
 
+jobs = {}
+
 -- This table keeps track of how many results + frames each client has returned
 -- This only increments when a client is the *first* to return a level's result
 clients = {}
@@ -714,6 +716,17 @@ function addToSpecies(child)
 	end
 end
 
+function generateJobQueue()
+	local jobs = {}
+	for s = 1, #pool.species do
+		for g = 1, #pool.species[s].genomes do
+			table.insert(jobs, {species=s, genome=g})
+		end
+	end
+	jobs.__index = 1
+	return jobs
+end
+
 function newGeneration()
 	cullSpecies(false) -- Cull the bottom half of each species
 	rankGlobally()
@@ -744,6 +757,7 @@ function newGeneration()
 	end
 	
 	pool.generation = pool.generation + 1
+	jobs = generateJobQueue()
 end
 	
 function initializePool()
@@ -770,34 +784,46 @@ if pool == nil then
 	initializePool()
 end
 
+function currentJobGenome()
+	local job = jobs[jobs.__index]
+	return pool.species[job.species].genomes[job.genome]
+end
+
+function allJobsComplete()
+	for i = 1, #jobs do
+		if pool.species[jobs[i].species].genomes[jobs[i].genome].fitness == 0 then
+			return false
+		end
+	end
+	return true
+end
+
+-- Advance the index. Assumes there is still a non-finished job available.
+function advanceJobsIndex() 
+	repeat	
+		jobs.__index = jobs.__index + 1
+		if jobs.__index > #jobs then
+			jobs.__index = 1
+		end
+	until currentJobGenome().fitness == 0
+end
+
 -- TODO: make sure we don't send a genome if we just got that genome's results!!
 function findNextNonRequestedGenome()
-	--pool.currentSpecies = 1
-	--pool.currentGenome = 1
-	local genome = pool.species[pool.currentSpecies].genomes[pool.currentGenome]
-
-	-- Advance past all requested and measured species.
-	while genome.fitness ~= 0 or genome.last_requested == pool.generation do
-		pool.currentGenome = pool.currentGenome + 1
-		if pool.currentGenome > #pool.species[pool.currentSpecies].genomes then
-			pool.currentGenome = 1
-			pool.currentSpecies = pool.currentSpecies + 1
-			if pool.currentSpecies > #pool.species then
-				-- There were no un-requested genomes.
-				-- Do the normal loop instead (may trigger new generation)
-				pool.currentSpecies = 1
-				while fitnessAlreadyMeasured() do
-					nextGenome()
-				end
-
-				-- We're now at the first unfinished result. Remember this
-				--pool.nextSpecies = pool.currentSpecies
-				--pool.nextGenome = pool.currentGenome
-				return
-			end
-		end
-		genome = pool.species[pool.currentSpecies].genomes[pool.currentGenome]
+	if not jobs then
+		jobs = generateJobQueue()
 	end
+
+	-- If there are no more jobs, then make a new generation.
+	if allJobsComplete() then
+		newGeneration()
+	end
+
+	local index = jobs.__index
+
+	pool.currentSpecies = jobs[index].species
+	pool.currentGenome = jobs[index].genome
+	advanceJobsIndex()
 end
 
 function nextGenome()
@@ -827,6 +853,8 @@ function writeFile(filename)
 	file:write(serpent.dump(levels))
 	file:write("\n")
 	file:write(serpent.dump(clients))
+	file:write("\n")
+	file:write(serpent.dump(jobs))
     file:close()
 end
 
@@ -852,7 +880,6 @@ function loadFile(filename)
 	initializeRun()
 	pool.currentFrame = pool.currentFrame + 1
 end
- 
 
 writeFile("temp.pool")
 clearLevels()
@@ -880,8 +907,9 @@ function printBoard(percentage)
 	end
 	for i=1, #last_levels do
 		local world, level = getWorldAndLevel(i)
-		if last_levels[i].a then
-			if last_levels[i].f > 0 then
+		-- active for compatibility
+		if last_levels[i].a or last_levels[i].active then
+			if last_levels[i].f and last_levels[i].f > 0 then
 				if last_levels[i].r == "victory" then
 					stdscr:attron(curses.color_pair(1))
 				end
@@ -905,7 +933,7 @@ function printBoard(percentage)
 		else
 			local fill = "-------------------------------------------------------"
 			-- Castle levels get special treatment
-			if i % 4 == 0 then
+			if i % 4 ~= 0 then
 				fill = "             Oo~Oo~Oo~Oo~Oo~Oo~             "
 			else -- Otherwise, assume water
 				fill = "______________[^]__[^__^]__[^]______________"
@@ -1016,7 +1044,7 @@ last_genome = -1
 
 while true do
 	-- Find the first open, non-requested spot.
-	-- Returns a requested spot if all have been requested.
+	-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
 	findNextNonRequestedGenome()
 	local percentage = calculatePercentage()
 
