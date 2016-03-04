@@ -26,3 +26,8 @@ Run server with LuaJIT! Supposed to be significantly faster than 5.1.
 
 Calculate a "frames checked in per second metric":
 (average of time since last result * total frames spent playing all 22 levels on current result)
+
+Write lua script that scores a human playing
+(basically, just cut out the neural network part)
+Can use for estimating human-level Mario ability
+Also use as a demo booth for imagine (who's better? your or the computer)
