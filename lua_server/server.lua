@@ -3,14 +3,87 @@ local socket = require("socket")
 local server = assert(socket.bind("*", 56506))
 local ip, port = server:getsockname()
 
+ButtonNames = {
+	"A",
+	"Left",
+	"Right",
+}
+
+-- GA parameters -- 
+BoxRadius = 6
+InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
+
+Inputs = InputSize + 3
+Outputs = #ButtonNames
+
+Population = 300
+DeltaDisjoint = 2.0
+DeltaWeights = 0.4
+DeltaThreshold = 1.0
+
+StaleSpecies = 15
+
+MutateConnectionsChance = 0.25
+PerturbChance = 0.90
+CrossoverChance = 0.75
+LinkMutationChance = 2.0
+NodeMutationChance = 0.50
+BiasMutationChance = 0.40
+StepSize = 0.1
+DisableMutationChance = 0.4
+EnableMutationChance = 0.2
+
+WorldAugmenter = 0.2
+LevelAugmenter = 0.1
+
+MaxNodes = 1000000
+
+NUM_DISPLAY_COLS = 50
+NUM_DISPLAY_ROWS = Population / NUM_DISPLAY_COLS
+
 ---- Set up curses
 local curses = require("curses")
 curses.initscr()
 curses.cbreak()
 curses.echo(false)
-curses.nl(false)
-local stdscr = curses.stdscr()
-stdscr:clear()
+curses.nl(true)
+--local stdscr = curses.stdscr()
+
+-- left column
+local ypos = 0
+local bannerscrheight = 4
+local genomescrheight = NUM_DISPLAY_ROWS + 2
+local histoscrheight = 22
+local statscrheight = 13
+
+local bannerscr = curses.newwin(bannerscrheight, 60, ypos, 0)
+ypos = ypos + bannerscrheight + 1
+local genomescr = curses.newwin(genomescrheight, 60, ypos, 0)
+ypos = ypos + genomescrheight + 1
+local histoscr  = curses.newwin(histoscrheight,  60, ypos, 0)
+ypos = ypos + histoscrheight + 1
+local statscr   = curses.newwin(statscrheight,   60, ypos, 0)
+ypos = ypos + statscrheight + 1
+
+-- right column
+local levelscr  = curses.newwin(36, 60, 0, 62)
+local clientscr = curses.newwin(statscrheight, 60, 37, 62)
+
+--stdscr:clear()
+bannerscr:clear()
+genomescr:clear()
+histoscr:clear()
+clientscr:clear()
+levelscr:clear()
+statscr:clear()
+
+bannerscr:border('|', '|', '-', '-', '+', '+', '+', '+')
+genomescr:border('|', '|', '-', '-', '+', '+', '+', '+')
+histoscr:border ('|', '|', '-', '-', '+', '+', '+', '+')
+clientscr:border('|', '|', '-', '-', '+', '+', '+', '+')
+levelscr:border ('|', '|', '-', '-', '+', '+', '+', '+')
+statscr:border  ('|', '|', '-', '-', '+', '+', '+', '+')
+
 curses.start_color()
 curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK);
 curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
@@ -114,43 +187,6 @@ function mysplit(inputstr, sep)
 	end
 	return t
 end
-
-ButtonNames = {
-	"A",
-	"Left",
-	"Right",
-}
-
-BoxRadius = 6
-InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
-
-Inputs = InputSize + 3
-Outputs = #ButtonNames
-
-Population = 300
-DeltaDisjoint = 2.0
-DeltaWeights = 0.4
-DeltaThreshold = 1.0
-
-StaleSpecies = 15
-
-MutateConnectionsChance = 0.25
-PerturbChance = 0.90
-CrossoverChance = 0.75
-LinkMutationChance = 2.0
-NodeMutationChance = 0.50
-BiasMutationChance = 0.40
-StepSize = 0.1
-DisableMutationChance = 0.4
-EnableMutationChance = 0.2
-
-WorldAugmenter = 0.2
-LevelAugmenter = 0.1
-
-MaxNodes = 1000000
-
-NUM_DISPLAY_COLS = 50
-NUM_DISPLAY_ROWS = Population / NUM_DISPLAY_COLS
 
 function sigmoid(x)
 	return 2/(1+math.exp(-4.9*x))-1
@@ -878,67 +914,79 @@ printf = function(s,...)
            return io.write(s:format(...))
          end -- function
 
-
-lastSumFitness = 0
-function printBoard(percentage)
+function printBanner(percentage)
 	-- Print previous results
-	stdscr:mvaddstr(0,0,"####################################################\n")
-	stdscr:addstr(string.format("#      gen %3d species %3d genome %3d (%3.1f%%)      #\n",   last_generation,
+	bannerscr:mvaddstr(1,1,string.format("      gen %3d species %3d genome %3d (%3.1f%%)",   last_generation,
 																					last_species,
 																					last_genome,
 																					percentage))
-	stdscr:addstr(string.format("#       fitness: %6d  max fitness: %6d       #\n", math.floor(lastSumFitness),
+	bannerscr:mvaddstr(2,1,string.format("       fitness: %6d  max fitness: %6d", math.floor(lastSumFitness),
 																					math.floor(pool.maxFitness)))
-	stdscr:addstr("####################################################\n")
+	bannerscr:refresh()
+end
 
-	stdscr:addstr("\n -------------------------------------------------- \n")
+function printGenomeDisplay()
 	local jobIndex = 1
+	genomescr:move(1,1)
 	for r = 1, NUM_DISPLAY_ROWS do
-		stdscr:addstr("|")
 		for c = 1, NUM_DISPLAY_COLS do
 			local job = jobs[jobIndex]
 			-- Is the job finished?
 			if pool.species[job.species].genomes[job.genome].fitness ~= 0 then
-				stdscr:addstr("#")
+				genomescr:addstr("#")
 			else
 				-- Requested?
 				if job.requested then
-					stdscr:addstr("o")
+					genomescr:addstr("o")
 				else
-					stdscr:addstr(" ")
+					genomescr:addstr(" ")
 				end
 			end
 			jobIndex = jobIndex + 1
 		end
-		stdscr:addstr("|\n")
+		y, x = genomescr:getyx()
+		genomescr:move(y+1, 1)
 	end
-	stdscr:addstr(" -------------------------------------------------- \n\n")
+	genomescr:refresh()
+end
 
-	stdscr:addstr(string.format("| lvl | times beaten  | reason     | fitness       |\n", i))
+function printHistoDisplay()
+	for i = 1, histoscrheight - 2 do
+		histoscr:mvaddstr(i,1,"##########################################################")
+	end
+	histoscr:refresh()
+end
+
+function printLevelsDisplay()
+	-- Don't print levels until we have results.
 	if not last_levels then
 		return
 	end
+	levelscr:mvaddstr(1,1,string.format("  lvl | times beaten  | reason     | fitness", i))
 	for i=1, #last_levels do
 		local world, level = getWorldAndLevel(i)
 		-- active for compatibility
+
+		local y, x = levelscr:getyx()
+
 		if last_levels[i].a or last_levels[i].active then
 			if last_levels[i].f and last_levels[i].f > 0 then
 				if last_levels[i].r == "victory" then
-					stdscr:attron(curses.color_pair(1))
+					levelscr:attron(curses.color_pair(1))
 				end
 				if last_levels[i].r == "enemyDeath" then
-					stdscr:attron(curses.color_pair(2))
+					levelscr:attron(curses.color_pair(2))
 				end
-				stdscr:addstr(string.format("| %1d-%1d | %13d | %10s |    %10.2f |\n", world,
+				levelscr:mvaddstr(y+1,1,string.format("  %1d-%1d | %13d | %10s |    %10.2f", world,
 																							level,
 																							levels[i].timesWon,
 																							last_levels[i].r,
 																							calculateFitness(last_levels[i], i)))
 
-				stdscr:attroff(curses.color_pair(1))
-				stdscr:attroff(curses.color_pair(2))
+				levelscr:attroff(curses.color_pair(1))
+				levelscr:attroff(curses.color_pair(2))
 			else
-				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               |\n", world,
+				levelscr:mvaddstr(y+1,1,string.format("  %1d-%1d | %13s |            |", world,
 																									  level,
 																									  "todo"))
 			end
@@ -950,12 +998,14 @@ function printBoard(percentage)
 			else -- Otherwise, assume water
 				fill = "______________[^]__[^__^]__[^]______________"
 			end
-			stdscr:addstr(string.format("| %1d-%1d |%30s|\n", world, level, fill))
+			levelscr:mvaddstr(y+1,1,string.format("  %1d-%1d |%30s", world, level, fill))
 		end
 	end
+	levelscr:refresh()
+end
 
-	stdscr:addstr("\n       --------------------------------------------\n")
-	stdscr:addstr("      | client        | levels        | frames     | stale\n")
+function printClientsDisplay()
+	clientscr:mvaddstr(1,1," a | client        | levels        | frames     | stale")
 	local totalLevelsPlayed = 0
 	for client, stats in pairs(clients) do
 		totalLevelsPlayed = totalLevelsPlayed + stats.levelsPlayed
@@ -967,11 +1017,19 @@ function printBoard(percentage)
 		if isFreshClient(client, now) then
 			active = "*"
 		end
-		stdscr:addstr(string.format("    %1s | %13s | %7d %4.1f%% | %10d | %7d", active, client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
-		stdscr:addstr("\n")
+		local y, x = clientscr:getyx()
+		clientscr:mvaddstr(y+1,1,string.format(" %1s | %13s | %7d %4.1f%% | %10d | %7d",
+			active, client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
 	end
-	stdscr:addstr("       --------------------------------------------\n\n")
-	stdscr:refresh()
+	clientscr:refresh()
+end
+
+function printBoard(percentage)
+	printBanner(percentage)
+	printGenomeDisplay()
+	printHistoDisplay()
+	printClientsDisplay()
+	printLevelsDisplay()
 end
 
 ------------------------------- Averages --------------------------------
@@ -1091,8 +1149,7 @@ lastGenerationSaved = pool.generation
 pool.currentSpecies = 1
 pool.currentGenome = 1
 
-lastSumFitness = 0
-
+-- Connection stats
 local connectionCount = 0
 local totalTimeWaiting = 0
 local totalTimeCommunicating = 0
@@ -1102,7 +1159,9 @@ last_levels = nil
 last_generation = -1
 last_species = -1
 last_genome = -1
+lastSumFitness = 0
 
+-- Used for the average FPS over the total session
 local start_of_session = socket.gettime()
 local total_frames_session = 0
 
@@ -1234,23 +1293,20 @@ while true do
 	addAverage(timeAverages, endTime - startTime)
 	local averageTime = getAverage(timeAverages)
 	local frameAverage = getAverage(frameAverages)
-	stdscr:addstr(string.format("   last: %5.3fs\naverage: %5.3fs\n",
-		endTime - startTime, averageTime))
-
-	stdscr:addstr(string.format("frames played per second   (avg): %7.0f\n",
+	statscr:mvaddstr(1,1,string.format("   last: %5.3f", endTime - startTime))
+	statscr:mvaddstr(2,1,string.format("average: %5.3f", averageTime))
+	statscr:mvaddstr(3,1,string.format("frames played per second   (avg): %7.0f",
 		frameAverage / averageTime))
-	stdscr:addstr(string.format("frames played per second (total): %7.0f\n",
+	statscr:mvaddstr(4,1,string.format("frames played per second (total): %7.0f",
 		total_frames_session / (endTime - start_of_session)))
-
-	stdscr:addstr(string.format("\n%2d conns | %5.3fs waiting | %5.3fs communicating\n",
+	statscr:mvaddstr(5,1,string.format("%2d conns | %5.3fs waiting | %5.3fs communicating",
 		connectionCount, totalTimeWaiting, totalTimeCommunicating))
-
 	if lastCheckpoint then
-		stdscr:addstr("\nsaved last checkpoint at " .. lastCheckpoint)
+		statscr:mvaddstr(6,1,"last saved: " .. lastCheckpoint)
 	end
 
-	stdscr:refresh()
+	statscr:refresh()
 
 	-- Refresh to show the iteration time + our last checkpoint
-	stdscr:refresh()
+	statscr:refresh()
 end
