@@ -66,38 +66,21 @@ jobs = {}
 -- This only increments when a client is the *first* to return a level's result
 clients = {}
 
--- Keep track of the last TimeAverageSize times to keep a rolling average
-TimeAverageSize = 100
-timeAverageIndex = 1
-timeAverages = {}
-for z = 1, TimeAverageSize do
-	timeAverages[z] = 0
-end
-
 function clearLevels()
 	for i = 1, #levels, 1 do
-		if not levels[i].d then
-			levels[i].d = 0
-		end
 		if not levels[i].f then
 			levels[i].f = 0
 		end
-		if not levels[i].d then
-			levels[i].w = 0
+		if not levels[i].timesWon then
+			levels[i].timesWon = 0
 		end
-		if not levels[i].f then
-			levels[i].r = ""
-		end
-		-- if not levels[i].timesWon then
-		-- 	levels[i].timesWon = 0
-		-- end
 
-		-- if not levels[i].totalFrames then
-		-- 	levels[i].totalFrames = 0
-		-- end
-		-- levels[i].fitness = nil
-		-- levels[i].lastRequester = ""
-		-- levels[i].reason = ""
+		if not levels[i].totalFrames then
+			levels[i].totalFrames = 0
+		end
+		levels[i].fitness = nil
+		levels[i].lastRequester = ""
+		levels[i].reason = ""
 	end
 	levelIndex = 1
 	iteration = iteration + 1
@@ -165,6 +148,9 @@ WorldAugmenter = 0.2
 LevelAugmenter = 0.1
 
 MaxNodes = 1000000
+
+NUM_DISPLAY_COLS = 50
+NUM_DISPLAY_ROWS = Population / NUM_DISPLAY_COLS
 
 function sigmoid(x)
 	return 2/(1+math.exp(-4.9*x))-1
@@ -806,6 +792,7 @@ function advanceJobsIndex()
 			jobs.__index = 1
 		end
 	until currentJobGenome().fitness == 0
+	jobs[jobs.__index].requested = true
 end
 
 -- TODO: make sure we don't send a genome if we just got that genome's results!!
@@ -872,6 +859,9 @@ function loadFile(filename)
 	ok2, levels = serpent.load(file:read("*line"))
 	ok3, clients = serpent.load(file:read("*line"))
 	file:close()
+
+	-- Make sure all levels fields have been initialized
+	clearLevels()
 	
 	-- Find the next unmeasured genome
 	while fitnessAlreadyMeasured() do
@@ -901,7 +891,30 @@ function printBoard(percentage)
 																					math.floor(pool.maxFitness)))
 	stdscr:addstr("####################################################\n")
 
-	stdscr:addstr(string.format("| lvl | client        | reason     | fitness       |\n", i))
+	stdscr:addstr("\n -------------------------------------------------- \n")
+	local jobIndex = 1
+	for r = 1, NUM_DISPLAY_ROWS do
+		stdscr:addstr("|")
+		for c = 1, NUM_DISPLAY_COLS do
+			local job = jobs[jobIndex]
+			-- Is the job finished?
+			if pool.species[job.species].genomes[job.genome].fitness ~= 0 then
+				stdscr:addstr("#")
+			else
+				-- Requested?
+				if job.requested then
+					stdscr:addstr("o")
+				else
+					stdscr:addstr(" ")
+				end
+			end
+			jobIndex = jobIndex + 1
+		end
+		stdscr:addstr("|\n")
+	end
+	stdscr:addstr(" -------------------------------------------------- \n\n")
+
+	stdscr:addstr(string.format("| lvl | times beaten  | reason     | fitness       |\n", i))
 	if not last_levels then
 		return
 	end
@@ -916,15 +929,14 @@ function printBoard(percentage)
 				if last_levels[i].r == "enemyDeath" then
 					stdscr:attron(curses.color_pair(2))
 				end
-				stdscr:addstr(string.format("| %1d-%1d | %13s | %10s |    %10.2f |\n", world,
+				stdscr:addstr(string.format("| %1d-%1d | %13d | %10s |    %10.2f |\n", world,
 																							level,
-																							"todo",
+																							levels[i].timesWon,
 																							last_levels[i].r,
 																							calculateFitness(last_levels[i], i)))
 
 				stdscr:attroff(curses.color_pair(1))
 				stdscr:attroff(curses.color_pair(2))
-
 			else
 				stdscr:addstr(string.format("| %1d-%1d | %13s |            |               |\n", world,
 																									  level,
@@ -948,32 +960,58 @@ function printBoard(percentage)
 	for client, stats in pairs(clients) do
 		totalLevelsPlayed = totalLevelsPlayed + stats.levelsPlayed
 	end
+	local now = socket.gettime()
 	for client, stats in pairs(clients) do
 		local percent = (stats.levelsPlayed / totalLevelsPlayed) * 100
-		stdscr:addstr(string.format("      | %13s | %7d %4.1f%% | %10d | %7d", client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
+		active = ""
+		if isFreshClient(client, now) then
+			active = "*"
+		end
+		stdscr:addstr(string.format("    %1s | %13s | %7d %4.1f%% | %10d | %7d", active, client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
 		stdscr:addstr("\n")
 	end
 	stdscr:addstr("       --------------------------------------------\n\n")
 	stdscr:refresh()
 end
 
-function addTimeAverage(time)
-	timeAverages[timeAverageIndex] = time
-	timeAverageIndex = timeAverageIndex + 1
-	if timeAverageIndex > TimeAverageSize then
-		timeAverageIndex = 1
+------------------------------- Averages --------------------------------
+-- Keep track of the last N values to keep a rolling average
+
+-- It's a good idea to keep these in sync with SAVE_EVERY (or divisible by)
+local TimeAverageSize = 100
+local FramesAverageSize = 100
+
+function createAverage(size)
+	averages = {}
+	for z = 1, size do
+		averages[z] = 0
+	end
+	averages.__index = 1
+	return averages
+end
+
+function addAverage(averages, value)
+	averages[averages.__index] = value
+	averages.__index = averages.__index + 1
+	if averages.__index > #averages then
+		averages.__index = 1
 	end
 end
 
-function getAverageTime()
-	local totalTime = 0
-	local numTimes = 0
-	for key, value in pairs(timeAverages) do
-		totalTime = totalTime + value
-		if value > 0 then numTimes = numTimes + 1 end
+function getAverage(averages)
+	local total = 0
+	local num = 0
+	for key, value in pairs(averages) do
+		total = total + value
+		if value > 0 then num = num + 1 end
 	end
-	return totalTime / numTimes
+	return total / num
 end
+
+timeAverages = createAverage(TimeAverageSize)
+frameAverages = createAverage(FramesAverageSize)
+
+--------------------------- End averages --------------------------------
 
 function calculateFitness(level, stateIndex)
 	local result = level.d
@@ -1013,6 +1051,29 @@ function calculatePercentage()
 	return (measured / total) * 100
 end
 
+function sumFrames(lvls)
+	local totalFrames = 0
+	for i = 1, #lvls do
+		totalFrames = totalFrames + lvls[i].f
+	end
+	return totalFrames
+end
+
+function addVictories(results)
+	for i = 1, #results do
+		if results[i].r == "victory" then
+			levels[i].timesWon = levels[i].timesWon + 1
+		end
+	end
+end
+
+function isFreshClient(clientId, now)
+	if clients[clientId].lastCheckIn then
+		return now - clients[clientId].lastCheckIn < 60
+	end
+	return false
+end
+
 -- Load backup if provided
 if #arg > 0 then
 	--print("Loading backup: " .. arg[1])
@@ -1020,7 +1081,7 @@ if #arg > 0 then
 end
 
 -- How many iterations to wait before saving a checkpoint
-SAVE_EVERY = 100
+SAVE_EVERY = 200
 -- How many iterations ago we last saved
 lastSaved = 0
 
@@ -1042,10 +1103,14 @@ last_generation = -1
 last_species = -1
 last_genome = -1
 
+local start_of_session = socket.gettime()
+local total_frames_session = 0
+
 while true do
 	-- Find the first open, non-requested spot.
 	-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
 	findNextNonRequestedGenome()
+
 	local percentage = calculatePercentage()
 
 	local startTime = socket.gettime()
@@ -1077,11 +1142,14 @@ while true do
 			local iterationId = tonumber(toks[5])
 			local versionCode = tonumber(toks[6])
 			local ok, r_levels = serpent.load(toks[7])
+			local stop_sending_levels = toks[8]
 
 			-- Is this a new client?
 			if not clients[clientId] then
-				clients[clientId] = {levelsPlayed = 0, framesPlayed = 0, staleLevels = 0}	
+				clients[clientId] = {levelsPlayed = 0, framesPlayed = 0, staleLevels = 0, lastCheckIn = 0}	
 			end
+
+			clients[clientId].lastCheckIn = socket.gettime()
 
 			-- Only use fresh results from new clients (if we haven't already received this result)
 			if r_generation == pool.generation
@@ -1093,9 +1161,15 @@ while true do
 				lastSumFitness = fitnessResult
 				pool.species[r_species].genomes[r_genome].fitness = fitnessResult
 
+				local totalFrames = sumFrames(r_levels)
+				addAverage(frameAverages, totalFrames)
+				total_frames_session = total_frames_session + totalFrames
+
+				addVictories(r_levels)
+
 				-- Update client stats
 				clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
-				clients[clientId].framesPlayed = clients[clientId].framesPlayed + 0--TODO frames
+				clients[clientId].framesPlayed = clients[clientId].framesPlayed + totalFrames
 
 				last_levels = r_levels
 				last_generation = r_generation
@@ -1110,17 +1184,19 @@ while true do
 
 		-- Send the next network to play
 		-- TODO: one table to rule them all
-		local response = serpent.dump(levels) .. "!" 
-						.. iteration .. "!" 
-						.. pool.generation .. "!" 
-						.. pool.currentSpecies .. "!" 
-						.. pool.currentGenome .. "!" 
-						.. math.floor(pool.maxFitness) .. "!" 
-						.. "(" .. percentage .. "%)!"
-						.. serpent.dump(genome.network) .. "\n"
-		--levels[nextLevel].lastRequester = clientId
-		client:send(response)
-		genome.last_requested = pool.generation
+		if not stop_sending_levels then
+			local response = serpent.dump(levels) .. "!" 
+							.. iteration .. "!" 
+							.. pool.generation .. "!" 
+							.. pool.currentSpecies .. "!" 
+							.. pool.currentGenome .. "!" 
+							.. math.floor(pool.maxFitness) .. "!" 
+							.. "(" .. percentage .. "%)!"
+							.. serpent.dump(genome.network) .. "\n"
+			--levels[nextLevel].lastRequester = clientId
+			client:send(response)
+			genome.last_requested = pool.generation
+		end
 
 		totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
 	else
@@ -1148,8 +1224,7 @@ while true do
 		lastCheckpoint = os.date("%c", os.time())
 	end
 
-	-- Savea backup of the generation
-	
+	-- Save a backup of the generation
 	if lastGenerationSaved ~= pool.generation then
 		writeFile("backup." .. pool.generation .. "." .. "NEW_GENERATION")
 		lastGenerationSaved = pool.generation
@@ -1157,11 +1232,18 @@ while true do
 
 	local endTime = socket.gettime()
 
-	addTimeAverage(endTime - startTime)
-	stdscr:addstr(string.format("last: %5.3fs | average: %5.3fs ",
-		endTime - startTime, getAverageTime()))
+	addAverage(timeAverages, endTime - startTime)
+	local averageTime = getAverage(timeAverages)
+	local frameAverage = getAverage(frameAverages)
+	stdscr:addstr(string.format("   last: %5.3fs\naverage: %5.3fs\n",
+		endTime - startTime, averageTime))
 
-	stdscr:addstr(string.format("| %2d conns | %5.3fs waiting | %5.3fs communicating\n",
+	stdscr:addstr(string.format("frames played per second   (avg): %7.0f\n",
+		frameAverage / averageTime))
+	stdscr:addstr(string.format("frames played per second (total): %7.0f\n",
+		total_frames_session / (endTime - start_of_session)))
+
+	stdscr:addstr(string.format("\n%2d conns | %5.3fs waiting | %5.3fs communicating\n",
 		connectionCount, totalTimeWaiting, totalTimeCommunicating))
 
 	if lastCheckpoint then
