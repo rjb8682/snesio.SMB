@@ -8,11 +8,12 @@ function initConfigFile()
 	-- Set default config file state here
 	config = {
 		clientId = "default_name",
-		server = "129.21.141.45",
+		server = "snes.bluefile.org",
 		port = 56506,
 		demoFile = "",
 		drawGui = false,
-		debug = false
+		debug = false,
+		killEvery = 900
 	}
 	local file = io.open("config.txt", "w")
 	file:write(serpent.dump(config))
@@ -31,11 +32,21 @@ function loadConfigFile()
 			initConfigFile()
 		end
 	end
+
+	-- Set defaults if missing
+	if not config.clientId then
+		config.clientId = "default_name"
+	end
+	if not config.server then
+		config.server = "snes.bluefile.org"
+	end
+	if not config.killEvery then
+		config.killEvery = 900
+	end
 end
 loadConfigFile()
 
 print("Using " .. config.server .. ":" .. config.port)
-
 
 ----------------- INPUTS ----------------------------
 Filename = "1.State"
@@ -478,6 +489,11 @@ end
 -- Global so that we can re-use the network string when possible
 networkStr = nil
 
+-- Controls when to stop training
+timeToDie = false
+
+start_time = socket.gettime()
+
 -- loop forever waiting for games to play
 while true do
 	emu.frameadvance()
@@ -530,6 +546,9 @@ while true do
 			end
 		end
 
+		-- Done playing. Determine if we should stop.
+		timeToDie = socket.gettime() - start_time > config.killEvery
+
 		-- Send it back yo
 		-- TODO just put it all in levels table
 		local results_to_send = config.clientId .. "!"
@@ -538,17 +557,21 @@ while true do
 				.. currentGenome .. "!"
 				.. iterationId .. "!" 
 				.. VERSION_CODE .. "!"
-			    .. serpent.dump(levels) .. "\n"
+			    .. serpent.dump(levels) .. "!"
+			    .. tostring(timeToDie) .. "\n"
 
 		local client2, err2 = socket.connect(config.server, config.port)
 		if not err2 then
 			client2:send(results_to_send)
 
-			-- The server might send the next level right away
-			maybeResponse, err3 = client2:receive()
-			if not err3 and response ~= "no_level" then
-				if config.debug then print("received next level from two-way connection") end
-				nextResponseToUse = maybeResponse
+			-- Only try to receive results if we're not going to exit
+			if not timeToDie then
+				-- The server might send the next level right away
+				maybeResponse, err3 = client2:receive()
+				if not err3 and response ~= "no_level" then
+					if config.debug then print("received next level from two-way connection") end
+					nextResponseToUse = maybeResponse
+				end
 			end
 		end
 		if client2 then
@@ -562,5 +585,10 @@ while true do
 		if err2 then
 			print("err2: " .. err2)
 		end
+	end
+
+	-- Time do die?
+	if timeToDie then
+		client.exit()
 	end
 end

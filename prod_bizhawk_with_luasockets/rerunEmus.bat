@@ -1,16 +1,13 @@
 @echo off
+setlocal ENABLEDELAYEDEXPANSION
 set originalAmount=%1
-set numEmus=%1
 :loop
-:forloop
-if %numEmus% leq 0 goto end
+::set /A totalEmus=tasklist | find /I /C "EmuHawk.exe"
+for /f "tokens=1,*" %%a in ('tasklist ^| find /I /C "EmuHawk.exe"') do set totalEmus=%%a
+if !totalEmus! geq %originalAmount% goto end
 start "EmuHawk.exe" "%~dp0\EmuHawk.exe"
-set /A numEmus=numEmus-1
-@timeout /t 1 
-goto forloop
+@timeout /t 3
+goto loop
 :end
-set /A numEmus=originalAmount
-@timeout /t 300
-taskkill /f /im EmuHawk.exe
-@timeout /t 1 
+@timeout /t 3
 goto loop
