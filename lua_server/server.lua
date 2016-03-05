@@ -1107,18 +1107,8 @@ local start_of_session = socket.gettime()
 local total_frames_session = 0
 
 while true do
-	-- Find the first open, non-requested spot.
-	-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
-	findNextNonRequestedGenome()
-
 	local percentage = calculatePercentage()
-
 	local startTime = socket.gettime()
-
-	initializeRun()
-
-	local species = pool.species[pool.currentSpecies]
-	local genome = species.genomes[pool.currentGenome]
 
 	local startTimeWaiting = socket.gettime()
 	local client = server:accept()
@@ -1128,6 +1118,8 @@ while true do
 	-- Receive the line
 	local startTimeCommunicating = socket.gettime()
 	local line, err = client:receive()
+
+	local stop_sending_levels = false
 
 	-- Was it good?
 	if not err then
@@ -1142,7 +1134,7 @@ while true do
 			local iterationId = tonumber(toks[5])
 			local versionCode = tonumber(toks[6])
 			local ok, r_levels = serpent.load(toks[7])
-			local stop_sending_levels = toks[8]
+			stop_sending_levels = toks[8]
 
 			-- Is this a new client?
 			if not clients[clientId] then
@@ -1184,7 +1176,14 @@ while true do
 
 		-- Send the next network to play
 		-- TODO: one table to rule them all
-		if not stop_sending_levels then
+		if stop_sending_levels ~= "true" then
+			-- Find the first open, non-requested spot.
+			-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
+			findNextNonRequestedGenome()
+			initializeRun()
+			local species = pool.species[pool.currentSpecies]
+			local genome = species.genomes[pool.currentGenome]
+
 			local response = serpent.dump(levels) .. "!" 
 							.. iteration .. "!" 
 							.. pool.generation .. "!" 
