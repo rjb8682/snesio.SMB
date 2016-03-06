@@ -31,3 +31,7 @@ Write lua script that scores a human playing
 (basically, just cut out the neural network part)
 Can use for estimating human-level Mario ability
 Also use as a demo booth for imagine (who's better? your or the computer)
+
+Consider faster serialization
+
+Imagine: play as mario does
