@@ -928,6 +928,7 @@ function printBanner(percentage)
 	bannerscr:refresh()
 end
 
+-- TODO: This assumes those that requested it also checked it in. 
 function printGenomeDisplay()
 	local jobIndex = 1
 	genomescr:move(1,1)
@@ -1072,7 +1073,7 @@ function printLevelsDisplay()
 end
 
 function printClientsDisplay()
-	clientscr:mvaddstr(1,1," a | id    client | genomes       | frames     | stale")
+	clientscr:mvaddstr(1,1," a | id       client | genomes       | frames     | stale")
 	local totalLevelsPlayed = 0
 	for client, stats in pairs(clients) do
 		totalLevelsPlayed = totalLevelsPlayed + stats.levelsPlayed
