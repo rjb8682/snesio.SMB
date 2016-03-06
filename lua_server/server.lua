@@ -1,6 +1,8 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local server = assert(socket.bind("*", 56506))
+local port = 56506
+local server = assert(socket.bind("*", port))
+local udp = assert(socket.udp("*", port))
 local ip, port = server:getsockname()
 
 ButtonNames = {
@@ -753,6 +755,8 @@ function generateJobQueue()
 end
 
 function newGeneration()
+	sendStaleMsgToAllClients()
+
 	cullSpecies(false) -- Cull the bottom half of each species
 	rankGlobally()
 	removeStaleSpecies()
@@ -1218,6 +1222,23 @@ function nextClientChar(clients)
 	return string.char(max + 1)
 end
 
+function sendStaleMsgToAllClients()
+	-- Send a warning messaage
+	local now = socket.gettime()
+	for clientId, stats in pairs(clients) do
+		if isFreshClient(clientId, now) and stats.ip and stats.port then
+			clientscr:mvaddstr(6,1,string.format("sending stale msg to %s %d", stats.ip, stats.port))
+			ok, err = udp:sendto('1111\n', stats.ip, stats.port)
+			if ok then
+				clientscr:mvaddstr(8,1,"ok!")
+			else
+				clientscr:mvaddstr(8,1,"sending stale msg to" .. err)
+			end
+			clientscr:refresh()
+		end
+	end
+end
+
 -- Load backup if provided
 if #arg > 0 then
 	--print("Loading backup: " .. arg[1])
@@ -1288,10 +1309,17 @@ while true do
 					framesPlayed = 0,
 					staleLevels = 0,
 					lastCheckIn = 0,
-					char = nextClientChar(clients)}	
+					char = nextClientChar(clients)}
 			end
 
+			local client_ip, client_port = client:getpeername()
+			clients[clientId].ip = client_ip
+			clients[clientId].port = tonumber(client_port)
 			clients[clientId].lastCheckIn = socket.gettime()
+
+			if client_ip and client_port then
+				clientscr:mvaddstr(7,1,string.format("client %s %d", clients[clientId].ip, clients[clientId].port))
+			end
 
 			-- Only use fresh results from new clients (if we haven't already received this result)
 			if r_generation == pool.generation
@@ -1362,7 +1390,7 @@ while true do
 	client:close()
 
 	printBoard(percentage)
-	
+
 	-- Make backups if we beat the current best	
 	if lastSumFitness > pool.maxFitness then
 		pool.maxFitness = lastSumFitness
