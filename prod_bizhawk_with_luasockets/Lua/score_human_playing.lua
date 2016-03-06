@@ -3,20 +3,6 @@ local serpent = require("serpent")
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
 local VERSION_CODE = 8
 
-function initConfigFile()
-	-- Set default config file state here
-	config = {
-		clientId = "default_name",
-		server = "129.21.141.45",
-		port = 56506,
-		demoFile = "",
-		drawGui = false,
-		debug = false
-	}
-	local file = io.open("config.txt", "w")
-	file:write(serpent.dump(config))
-	file:close()
-end
 function loadConfigFile()
 	local file = io.open("config.txt", "r")
 	if not file then
@@ -32,6 +18,7 @@ function loadConfigFile()
 	end
 end
 loadConfigFile()
+config.drawGui = true
 
 print("Using " .. config.server .. ":" .. config.port)
 
@@ -254,14 +241,11 @@ function playGame(stateIndex)
 		local fitness = rightmost - (currentFrame / 10)
 
 		if config.drawGui == true then
-			gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
-			gui.drawText(0, 10, "Generation: " .. generation
-								.. "." .. currentSpecies
-								.. "." .. currentGenome
-								.. " Fitness: " .. math.floor(fitness), 0xFF000000, 11)
+			gui.drawBox(0, 7, 300, 30, 0xD0FFFFFF, 0xD0FFFFFF)
 			local world, level = getWorldAndLevel(stateIndex)
-			gui.drawText(0, 22, "Level: " .. world .. "-" .. level .. " (" .. stateIndex .. ")", 0xFF000000, 11)
-			gui.drawText(120, 22, "Total Max: " .. maxFitness, 0xFF000000, 11)
+			local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
+			gui.drawText(0, 10, " Fitness: " .. math.floor(multi * fitness + maxFitness), 0xFF000000, 11)
+			gui.drawText(150, 10, "Level: " .. world .. "-" .. level .. " (" .. stateIndex .. ")", 0xFF000000, 11)
 		end
 
 		-- Check for death
