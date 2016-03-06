@@ -936,13 +936,23 @@ function printGenomeDisplay()
 			local job = jobs[jobIndex]
 			-- Is the job finished?
 			if pool.species[job.species].genomes[job.genome].fitness ~= 0 then
-				genomescr:addstr("#")
+				genomescr:attron(curses.color_pair(1))
+				if job.client then	
+					genomescr:addch(job.client)
+				else
+					genomescr:addch("#")
+				end
+				genomescr:attroff(curses.color_pair(1))
 			else
 				-- Requested?
 				if job.requested then
-					genomescr:addstr("o")
+					if job.client then
+						genomescr:addch(job.client)
+					else
+						genomescr:addch("o")
+					end
 				else
-					genomescr:addstr(" ")
+					genomescr:addch(" ")
 				end
 			end
 			jobIndex = jobIndex + 1
@@ -1062,21 +1072,26 @@ function printLevelsDisplay()
 end
 
 function printClientsDisplay()
-	clientscr:mvaddstr(1,1," a | client        | levels        | frames     | stale")
+	clientscr:mvaddstr(1,1," a | id    client | genomes       | frames     | stale")
 	local totalLevelsPlayed = 0
 	for client, stats in pairs(clients) do
 		totalLevelsPlayed = totalLevelsPlayed + stats.levelsPlayed
 	end
 	local now = socket.gettime()
 	for client, stats in pairs(clients) do
+		-- Temporary. Can be deleted once all clients have IDs.
+		if not stats.char then
+			stats.char = nextClientChar(clients)
+		end
+
 		local percent = (stats.levelsPlayed / totalLevelsPlayed) * 100
 		active = ""
 		if isFreshClient(client, now) then
 			active = "*"
 		end
 		local y, x = clientscr:getyx()
-		clientscr:mvaddstr(y+1,1,string.format(" %1s | %13s | %7d %4.1f%% | %10d | %7d",
-			active, client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
+		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %13s | %7d %4.1f%% | %10d | %5d",
+			active, stats.char, client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
 	end
 	clientscr:refresh()
 end
@@ -1191,6 +1206,17 @@ function isFreshClient(clientId, now)
 	return false
 end
 
+function nextClientChar(clients)
+	max = string.byte('a') - 1
+	for clientId, stats in pairs(clients) do
+		cur = stats.char
+		if cur and string.byte(cur) > max then
+			max = string.byte(cur)
+		end
+	end
+	return string.char(max + 1)
+end
+
 -- Load backup if provided
 if #arg > 0 then
 	--print("Loading backup: " .. arg[1])
@@ -1256,7 +1282,12 @@ while true do
 
 			-- Is this a new client?
 			if not clients[clientId] then
-				clients[clientId] = {levelsPlayed = 0, framesPlayed = 0, staleLevels = 0, lastCheckIn = 0}	
+				clients[clientId] = {
+					levelsPlayed = 0,
+					framesPlayed = 0,
+					staleLevels = 0,
+					lastCheckIn = 0,
+					char = nextClientChar(clients)}	
 			end
 
 			clients[clientId].lastCheckIn = socket.gettime()
@@ -1314,6 +1345,11 @@ while true do
 			--levels[nextLevel].lastRequester = clientId
 			client:send(response)
 			genome.last_requested = pool.generation
+
+			-- Set client char if available
+			if clients[clientId] then
+				jobs[jobs.__index].client = clients[clientId].char
+			end
 		end
 
 		totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
