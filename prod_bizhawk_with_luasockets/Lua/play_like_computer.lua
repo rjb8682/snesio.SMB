@@ -1,7 +1,6 @@
 local serpent = require("serpent")
 
--- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 8
+-- TODO: Init to 100%, display on
 
 function loadConfigFile()
 	local file = io.open("config.txt", "r")
@@ -19,9 +18,8 @@ function loadConfigFile()
 end
 loadConfigFile()
 config.drawGui = true
-
-print("Using " .. config.server .. ":" .. config.port)
-
+config.blind = true
+config.showFitness = false
 
 ----------------- INPUTS ----------------------------
 Filename = "1.State"
@@ -222,6 +220,53 @@ function getInputs()
 	return inputs
 end
 
+function displayGenome(inputs)
+	local cx = 128
+	local cy = 120
+	local box_rad = 8
+	local m = 18
+
+	local cells = {}
+	local i = 1
+	local cell = {}
+	for dy=-BoxRadiusY,BoxRadiusY do
+		for dx=-BoxRadiusX,BoxRadiusX do
+			cell = {}
+			cell.x = cx+m*dx
+			cell.y = cy+m*dy
+			cell.value = inputs[i]
+			cells[i] = cell
+			i = i + 1
+		end
+	end
+	
+	-- 	gui.drawBox(120-BoxRadiusX*5-3,128-BoxRadiusY*5-3,120+BoxRadiusX*5+2,128+BoxRadiusY*5+2,0xFF000000, 0x80808080)
+	local background = 0x80808080
+	if config.blind then
+		background = 0xFAFAFAFA
+	end
+	gui.drawBox(cx-(BoxRadiusX*m+22),cy-(BoxRadiusY*m+5),
+				cx+(BoxRadiusX*m+22),cy+(BoxRadiusY*m+5),0xFF000000, background)
+	for n,cell in pairs(cells) do
+		if n > Inputs or cell.value ~= 0 then
+			local color = math.floor((cell.value+1)/2*256)
+			if color > 255 then color = 255 end
+			if color < 0 then color = 0 end
+			local opacity = 0xFF000000
+			if cell.value == 0 then
+				opacity = 0x50000000
+			end
+			color = opacity + color*0x10000 + color*0x100 + color
+			gui.drawBox(cell.x-box_rad,cell.y-box_rad,cell.x+box_rad,cell.y+box_rad,opacity,color)
+		end
+	end
+	
+	XChange = m * ShiftX
+	YChange = m * (ShiftY-1)
+	gui.drawBox(cx-XChange-box_rad,cy-YChange-box_rad,
+				cx-XChange+box_rad,cy-YChange+box_rad,0x00000000,0x80FF0000)
+end
+
 function playGame(stateIndex)
 	savestate.load(stateIndex .. ".State")
 
@@ -231,7 +276,8 @@ function playGame(stateIndex)
 
 	-- Play until we die / win
 	while true do
-		getInputs()
+		local inputs = getInputs()
+		displayGenome(inputs)
 
 		-- Check how far we are in the level
 		if marioX > rightmost then
@@ -240,7 +286,7 @@ function playGame(stateIndex)
 
 		local fitness = rightmost - (currentFrame / 10)
 
-		if config.drawGui == true then
+		if config.showFitness then --TODOconfig.drawGui == true then
 			gui.drawBox(0, 7, 300, 30, 0xD0FFFFFF, 0xD0FFFFFF)
 			local world, level = getWorldAndLevel(stateIndex)
 			local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
