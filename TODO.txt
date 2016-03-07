@@ -37,4 +37,4 @@ Consider faster serialization
 Imagine: play as mario does
 
 Client option to request full genomes rather than genome.network, that we we can watch how the network changes as we evolve from generation zero (great for imagine)
-
+DEMO OPTION: always send the best genome!!! (new request type) -- watch the network evolving!!
