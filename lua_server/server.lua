@@ -892,6 +892,16 @@ function writeNetwork(filename, network)
 	file:close()
 end
 
+-- TODO: This supercedes writeNetwork. Test to make sure they're equivalent, and if not,
+-- just save both in the same file.
+function writeGenome(filename, genome)
+	-- TODO: turn on when ready
+	--local file = io.open("backups_dev/genomes/" .. filename, "w")
+	--file:write(serpent.dump(genome))
+	--file:write("\n")
+	--file:close()
+end
+
 function loadFile(filename)
 	local file = io.open("backups_dev/" .. filename, "r")
 	ok1, pool   = serpent.load(file:read("*line"))
@@ -982,7 +992,8 @@ function getHistoBuckets(avgs, num_buckets, max_per_bucket)
 	end
 
 	for i = 1, num_buckets do
-		buckets[i] = (buckets[i] / total) * max_per_bucket
+		-- Round
+		buckets[i] = math.floor((buckets[i] / total) * max_per_bucket + 0.5)
 	end
 
 	return buckets
@@ -991,7 +1002,7 @@ end
 function printHistoDisplay()
 	local num_buckets = 50
 	local max_per_bucket = histoscrheight - 4
-	local buckets = getHistoBuckets(fitnessAverages, num_buckets, histoscrheight)
+	local buckets = getHistoBuckets(fitnessAverages, num_buckets, histoscrheight - 5)
 
 	-- Add values
 	for x = 1, num_buckets do
@@ -1225,7 +1236,7 @@ if #arg > 0 then
 end
 
 -- How many iterations to wait before saving a checkpoint
-SAVE_EVERY = 200
+SAVE_EVERY = 1000 -- every 3.3 generations
 -- How many iterations ago we last saved
 lastSaved = 0
 
@@ -1303,6 +1314,10 @@ while true do
 				lastSumFitness = fitnessResult
 				pool.species[r_species].genomes[r_genome].fitness = fitnessResult
 				addAverage(fitnessAverages, lastSumFitness)
+
+				if fitnessResult > 170000 then
+					writeGenome(tostring(fitnessResult) .. ".genome", pool.species[r_species].genomes[r_genome])
+				end
 
 				local totalFrames = sumFrames(r_levels)
 				addAverage(frameAverages, totalFrames)
