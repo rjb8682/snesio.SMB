@@ -10,6 +10,7 @@ function initConfigFile()
 		clientId = "default_name",
 		server = "snes.bluefile.org",
 		port = 56506,
+		clientPort = 56706,
 		demoFile = "",
 		drawGui = false,
 		debug = false,
@@ -39,6 +40,9 @@ function loadConfigFile()
 	end
 	if not config.server then
 		config.server = "snes.bluefile.org"
+	end
+	if not config.clientPort then
+		config.clientPort = 56706
 	end
 	if not config.killEvery then
 		config.killEvery = 900
@@ -486,6 +490,27 @@ if config.demoFile and config.demoFile ~= "" then
 end
 -------------------- END DEMO CODE ONLY -------------------------------------
 
+function attemptUDPConnection(tcp)
+	if udp then
+		udp:close()
+	end
+	-- Set up a UDP connection to check for when we should stop.
+	udp = socket.udp()
+	-- Make sure we stay on the same port as the TCP conn
+	ip, port = tcp:getsockname()
+	udp:setsockname(ip, port)
+	udp:settimeout(0)
+end
+
+function shouldStopPlaying()
+	-- If we do have a UDP connection, check our mailbox for a stop message.
+	if udp then
+		-- Attempt to receive a datagram. If non-nil, we should stop playing.
+		return udp:receive()
+	end
+	return false
+end
+
 -- Global so that we can re-use the network string when possible
 networkStr = nil
 
@@ -497,6 +522,7 @@ start_time = socket.gettime()
 -- loop forever waiting for games to play
 while true do
 	emu.frameadvance()
+	local alreadyStale = false
 
 	local toks, iterationId, ok
 
@@ -512,6 +538,8 @@ while true do
 		if not err then
 			bytes, err = client:send(config.clientId .. "\n")
 			response, err2 = client:receive()
+			-- Set up stale checking using the same IP
+			attemptUDPConnection(client)
 		end
 		-- Close the client and play
 		if client then
@@ -531,9 +559,11 @@ while true do
 		percentage = toks[7]
 		networkStr = toks[8]
 
+		alreadyStale = alreadyStale or shouldStopPlaying()
+
 		-- Play all requested levels
 		for stateId, level in pairs(levels) do
-			if level.a then
+			if level.a and not alreadyStale then
 				-- Ensure the network is fresh by re-loading it from the string
 				-- TODO: explore ways to reset it robustly?
 				local ok, network = serpent.load(networkStr)
@@ -544,33 +574,43 @@ while true do
 				level.w = wonLevel
 				level.r = reason
 			end
+			alreadyStale = alreadyStale or shouldStopPlaying()
+			if alreadyStale then
+				if config.debug then print("STALE! Requesting new and starting from 1-1") end
+				break
+			end
 		end
 
-		-- Done playing. Determine if we should stop.
+		-- Done playing. Determine if we should kill the emulator.
 		timeToDie = socket.gettime() - start_time > config.killEvery
 
-		-- Send it back yo
-		-- TODO just put it all in levels table
-		local results_to_send = config.clientId .. "!"
-				.. generation .. "!"
-				.. currentSpecies .. "!"
-				.. currentGenome .. "!"
-				.. iterationId .. "!" 
-				.. VERSION_CODE .. "!"
-			    .. serpent.dump(levels) .. "!"
-			    .. tostring(timeToDie) .. "\n"
+		-- Don't send results if we're already stale. (Happens at end of gen)
+		if not alreadyStale then
+			-- Send it back yo
+			-- TODO just put it all in levels table
+			local results_to_send = config.clientId .. "!"
+					.. generation .. "!"
+					.. currentSpecies .. "!"
+					.. currentGenome .. "!"
+					.. iterationId .. "!" 
+					.. VERSION_CODE .. "!"
+				    .. serpent.dump(levels) .. "!"
+				    .. tostring(timeToDie) .. "\n"
 
-		local client2, err2 = socket.connect(config.server, config.port)
-		if not err2 then
-			client2:send(results_to_send)
+			local client2, err2 = socket.connect(config.server, config.port)
+			if not err2 then
+				client2:send(results_to_send)
+				-- Set up stale checking using the same IP
+				attemptUDPConnection(client2)
 
-			-- Only try to receive results if we're not going to exit
-			if not timeToDie then
-				-- The server might send the next level right away
-				maybeResponse, err3 = client2:receive()
-				if not err3 and response ~= "no_level" then
-					if config.debug then print("received next level from two-way connection") end
-					nextResponseToUse = maybeResponse
+				-- Only try to receive results if we're not going to kill ourselves
+				if not timeToDie then
+					-- The server might send the next level right away
+					maybeResponse, err3 = client2:receive()
+					if not err3 and response ~= "no_level" then
+						if config.debug then print("received next level from two-way connection") end
+						nextResponseToUse = maybeResponse
+					end
 				end
 			end
 		end
