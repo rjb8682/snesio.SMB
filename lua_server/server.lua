@@ -55,7 +55,7 @@ local ypos = 0
 local bannerscrheight = 4
 local genomescrheight = NUM_DISPLAY_ROWS + 2
 local histoscrheight = 24
-local statscrheight = 13
+local statscrheight = 33
 
 local bannerscr = curses.newwin(bannerscrheight, lcolwidth, ypos, 0)
 ypos = ypos + bannerscrheight - 1
@@ -68,8 +68,9 @@ ypos = ypos + statscrheight - 1
 
 -- right column
 local rcolx = lcolwidth + 2
-local levelscr  = curses.newwin(36, 60, 0, rcolx)
-local clientscr = curses.newwin(statscrheight, 60, 35, rcolx)
+-- -10 to omit non-played levels
+local levelscr  = curses.newwin(36 - 10, 60, 0, rcolx)
+local clientscr = curses.newwin(statscrheight, 60, 35 - 10, rcolx)
 
 --stdscr:clear()
 bannerscr:clear()
@@ -885,21 +886,21 @@ function writeFile(filename)
 end
 
 function writeNetwork(filename, network)
-	-- TODO: turn on when ready
-	local file = io.open("backups_dev/networks/" .. filename, "w")
-	file:write(serpent.dump(network))
-	file:write("\n")
-	file:close()
+	-- TODO: turn off when ready
+	--local file = io.open("backups_dev_2/networks/" .. filename, "w")
+	--file:write(serpent.dump(network))
+	--file:write("\n")
+	--file:close()
 end
 
 -- TODO: This supercedes writeNetwork. Test to make sure they're equivalent, and if not,
 -- just save both in the same file.
 function writeGenome(filename, genome)
 	-- TODO: turn on when ready
-	--local file = io.open("backups_dev/genomes/" .. filename, "w")
-	--file:write(serpent.dump(genome))
-	--file:write("\n")
-	--file:close()
+	local file = io.open("backups_dev/genomes/" .. filename, "w")
+	file:write(serpent.dump(genome))
+	file:write("\n")
+	file:close()
 end
 
 function loadFile(filename)
@@ -1070,6 +1071,7 @@ function printLevelsDisplay()
 																									  "todo"))
 			end
 		else
+			--[[
 			local fill = "-------------------------------------------------------"
 			-- Castle levels get special treatment
 			if i % 4 ~= 0 then
@@ -1078,6 +1080,7 @@ function printLevelsDisplay()
 				fill = "______________[^]__[^__^]__[^]______________"
 			end
 			levelscr:mvaddstr(y+1,1,string.format("  %1d-%1d |%30s", world, level, fill))
+			]]--
 		end
 	end
 	levelscr:refresh()
@@ -1236,7 +1239,7 @@ if #arg > 0 then
 end
 
 -- How many iterations to wait before saving a checkpoint
-SAVE_EVERY = 1000 -- every 3.3 generations
+SAVE_EVERY = 9999999 -- every 3.3 generations
 -- How many iterations ago we last saved
 lastSaved = 0
 
@@ -1315,7 +1318,7 @@ while true do
 				pool.species[r_species].genomes[r_genome].fitness = fitnessResult
 				addAverage(fitnessAverages, lastSumFitness)
 
-				if fitnessResult > 170000 then
+				if fitnessResult > pool.maxFitness then
 					writeGenome(tostring(fitnessResult) .. ".genome", pool.species[r_species].genomes[r_genome])
 				end
 
