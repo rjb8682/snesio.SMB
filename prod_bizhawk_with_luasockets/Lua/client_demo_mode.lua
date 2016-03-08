@@ -1,7 +1,7 @@
 local serpent = require("serpent")
 local socket = require("socket")
 
-config = {server="snes.bluefile.org", port=67617, drawGui=true, drawGenome=false, debug=true, clientId="demo"}
+config = {server="snes.bluefile.org", port=67617, drawGui=true, drawGenome=true, debug=true, clientId="demo"}
 print("Using " .. config.server .. ":" .. config.port)
 
 ----------------- INPUTS ----------------------------
@@ -294,11 +294,12 @@ function playGame(stateIndex, genome)
 		local fitness = rightmost - (currentFrame / 4)
 
 		if config.drawGui == true then
-			gui.drawBox(0, 7, 300, 32, 0xD0FFFFFF, 0xD0FFFFFF)
+			gui.drawBox(0, 7, 300, 36, 0xD0FFFFFF, 0xD0FFFFFF)
 			local world, level = getWorldAndLevel(stateIndex)
 			local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
-			gui.drawText(0, 10, "Level: " .. world .. "-" .. level .. " (" .. stateIndex .. ")", 0xFF000000, 11)
-			gui.drawText(120, 10, " fitness: " .. math.floor(multi * fitness + maxFitness), 0xFF000000, 11)
+			gui.drawText(0, 8, "Level: " .. world .. "-" .. level .. " (" .. stateIndex .. ")", 0xFF000000, 11)
+			gui.drawText(120, 8, " fitness: " .. math.floor(multi * fitness + maxFitness), 0xFF000000, 11)
+			gui.drawText(83, 20, "total fitness: " .. math.floor(genome.fitness), 0xFF000000, 11)
 		end
 
 		-- Check for death
@@ -386,7 +387,7 @@ function displayGenome(genome)
 		cell = {}
 		if n > Inputs and n <= MaxNodes then
 			cell.x = 140
-			cell.y = 4000
+			cell.y = 100
 			cell.value = neuron.value
 			cells[n] = cell
 		end
@@ -539,7 +540,6 @@ function getNewGenome()
 end
 
 local response = nil
-
 -- loop forever waiting for games to play
 while true do
 	emu.frameadvance()
