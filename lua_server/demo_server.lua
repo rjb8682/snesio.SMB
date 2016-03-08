@@ -2,7 +2,7 @@ local serpent = require("serpent")
 local socket = require("socket")
 local server = assert(socket.bind("*", 67617))
 local ip, port = server:getsockname()
-local genomeDir = "backups_dev/genomes/"
+local genomeDir = "backups_dev_3/genomes/"
 
 function mysplit(inputstr, sep)
         if sep == nil then
