@@ -10,7 +10,6 @@ function initConfigFile()
 		clientId = "default_name",
 		server = "snes.bluefile.org",
 		port = 56506,
-		clientPort = 56706,
 		demoFile = "",
 		drawGui = false,
 		debug = false,
@@ -40,9 +39,6 @@ function loadConfigFile()
 	end
 	if not config.server then
 		config.server = "snes.bluefile.org"
-	end
-	if not config.clientPort then
-		config.clientPort = 56706
 	end
 	if not config.killEvery then
 		config.killEvery = 900
