@@ -18,7 +18,7 @@ InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 Inputs = InputSize + 3
 Outputs = #ButtonNames
 
-Population = 300
+Population = 50
 DeltaDisjoint = 2.0
 DeltaWeights = 0.4
 DeltaThreshold = 1.0
@@ -878,7 +878,7 @@ end
 
 function writeFile(filename)
 	-- TODO: turn on when ready
-	local file = io.open("backups_dev/" .. filename, "w")
+	local file = io.open("backups_dev_3/" .. filename, "w")
 	file:write(serpent.dump(pool))
 	file:write("\n")
 	file:write(serpent.dump(levels))
@@ -901,14 +901,14 @@ end
 -- just save both in the same file.
 function writeGenome(filename, genome)
 	-- TODO: turn on when ready
-	local file = io.open("backups_dev/genomes/" .. filename, "w")
+	local file = io.open("backups_dev_3/genomes/" .. filename, "w")
 	file:write(serpent.dump(genome))
 	file:write("\n")
 	file:close()
 end
 
 function loadFile(filename)
-	local file = io.open("backups_dev/" .. filename, "r")
+	local file = io.open("backups_dev_3/" .. filename, "r")
 	ok1, pool   = serpent.load(file:read("*line"))
 	ok2, levels = serpent.load(file:read("*line"))
 	ok3, clients = serpent.load(file:read("*line"))
