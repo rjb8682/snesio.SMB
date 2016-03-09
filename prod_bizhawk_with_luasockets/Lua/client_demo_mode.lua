@@ -1,7 +1,7 @@
 local serpent = require("serpent")
 local socket = require("socket")
 
-config = {server="snes.bluefile.org", port=67617, drawGui=true, drawGenome=true, debug=true, clientId="demo"}
+config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=true, clientId="demo"}
 print("Using " .. config.server .. ":" .. config.port)
 
 ----------------- INPUTS ----------------------------

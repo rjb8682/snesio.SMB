@@ -502,7 +502,8 @@ function shouldStopPlaying()
 	-- If we do have a UDP connection, check our mailbox for a stop message.
 	if udp then
 		-- Attempt to receive a datagram. If non-nil, we should stop playing.
-		return udp:receive()
+		result, err = udp:receive()
+		return result
 	end
 	return false
 end
