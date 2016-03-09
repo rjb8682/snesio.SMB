@@ -2,7 +2,7 @@ local serpent = require("serpent")
 local socket = require("socket")
 local server = assert(socket.bind("*", 67617))
 local ip, port = server:getsockname()
-local genomeDir = "backups_dev_3/genomes/"
+local genomeDir = "backups_dev_4/genomes/"
 
 function mysplit(inputstr, sep)
         if sep == nil then
@@ -17,10 +17,14 @@ function mysplit(inputstr, sep)
 end
 
 function loadFile(filename)
+	if not filename then return nil end
 	local file = io.open(genomeDir .. filename, "r")
 	genome = file:read("*line")
 	file:close()
-	return genome .. "\n"
+	if genome then
+		return genome .. "\n"
+	end
+	return nil
 end
 
 function getBestGenome(file_table)
@@ -42,7 +46,7 @@ function getBestGenome(file_table)
 			end
 		end
 	end
-	print("best: " .. bestFile)
+	print("best: " .. tostring(bestFile))
 	return bestFile
 end
 
@@ -68,7 +72,7 @@ while true do
 
 	-- Was it good?
 	if not err and line then
-		print("client connected. sending ")
+		print("client connected")
 
 		local file_table = scandir(genomeDir)
 		local genome = loadFile(getBestGenome(file_table))

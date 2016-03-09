@@ -5,6 +5,12 @@ local server = assert(socket.bind("*", port))
 local udp = assert(socket.udp("*", port))
 local ip, port = server:getsockname()
 
+-- How many generations do we wait to save?
+SAVE_EVERY_N_GENERATIONS = 5
+
+-- Where to save backups
+backupDir = "backups_dev_4/"
+
 ButtonNames = {
 	"A",
 	"Left",
@@ -751,7 +757,7 @@ function generateJobQueue()
 			table.insert(jobs, {species=s, genome=g})
 		end
 	end
-	jobs.__index = 1
+	jobs.index = 1
 	return jobs
 end
 
@@ -815,7 +821,7 @@ if pool == nil then
 end
 
 function currentJobGenome()
-	local job = jobs[jobs.__index]
+	local job = jobs[jobs.index]
 	return pool.species[job.species].genomes[job.genome]
 end
 
@@ -831,12 +837,12 @@ end
 -- Advance the index. Assumes there is still a non-finished job available.
 function advanceJobsIndex() 
 	repeat	
-		jobs.__index = jobs.__index + 1
-		if jobs.__index > #jobs then
-			jobs.__index = 1
+		jobs.index = jobs.index + 1
+		if jobs.index > #jobs then
+			jobs.index = 1
 		end
 	until currentJobGenome().fitness == 0
-	jobs[jobs.__index].requested = true
+	jobs[jobs.index].requested = true
 end
 
 -- TODO: make sure we don't send a genome if we just got that genome's results!!
@@ -850,7 +856,7 @@ function findNextNonRequestedGenome()
 		newGeneration()
 	end
 
-	local index = jobs.__index
+	local index = jobs.index
 
 	pool.currentSpecies = jobs[index].species
 	pool.currentGenome = jobs[index].genome
@@ -878,7 +884,7 @@ end
 
 function writeFile(filename)
 	-- TODO: turn on when ready
-	local file = io.open("backups_dev_3/" .. filename, "w")
+	local file = io.open(backupDir .. filename, "w")
 	file:write(serpent.dump(pool))
 	file:write("\n")
 	file:write(serpent.dump(levels))
@@ -891,7 +897,7 @@ end
 
 function writeNetwork(filename, network)
 	-- TODO: turn off when ready
-	--local file = io.open("backups_dev_2/networks/" .. filename, "w")
+	--local file = io.open(backupDir .. "networks/" .. filename, "w")
 	--file:write(serpent.dump(network))
 	--file:write("\n")
 	--file:close()
@@ -901,14 +907,14 @@ end
 -- just save both in the same file.
 function writeGenome(filename, genome)
 	-- TODO: turn on when ready
-	local file = io.open("backups_dev_3/genomes/" .. filename, "w")
+	local file = io.open(backupDir .. "genomes/" .. filename, "w")
 	file:write(serpent.dump(genome))
 	file:write("\n")
 	file:close()
 end
 
 function loadFile(filename)
-	local file = io.open("backups_dev_3/" .. filename, "r")
+	local file = io.open(backupDir .. filename, "r")
 	ok1, pool   = serpent.load(file:read("*line"))
 	ok2, levels = serpent.load(file:read("*line"))
 	ok3, clients = serpent.load(file:read("*line"))
@@ -1129,6 +1135,7 @@ end
 -- It's a good idea to keep these in sync with SAVE_EVERY (or divisible by)
 local TimeAverageSize = 100
 local FramesAverageSize = 100
+local NumPortSize = 16
 local FitnessAverageSize = Population
 
 function createAverage(size)
@@ -1136,15 +1143,15 @@ function createAverage(size)
 	for z = 1, size do
 		averages[z] = 0
 	end
-	averages.__index = 1
+	averages.index = 1
 	return averages
 end
 
 function addAverage(averages, value)
-	averages[averages.__index] = value
-	averages.__index = averages.__index + 1
-	if averages.__index > #averages then
-		averages.__index = 1
+	averages[averages.index] = value
+	averages.index = averages.index + 1
+	if averages.index > #averages then
+		averages.index = 1
 	end
 end
 
@@ -1152,8 +1159,10 @@ function getAverage(averages)
 	local total = 0
 	local num = 0
 	for key, value in pairs(averages) do
-		total = total + value
-		if value > 0 then num = num + 1 end
+		if key ~= "index" and value ~= 0 then
+			total = total + value
+			num = num + 1
+		end
 	end
 	return total / num
 end
@@ -1239,16 +1248,18 @@ end
 function sendStaleMsgToAllClients()
 	-- Send a warning messaage
 	local now = socket.gettime()
+	local row = 12
 	for clientId, stats in pairs(clients) do
-		if isFreshClient(clientId, now) and stats.ip and stats.port then
-			clientscr:mvaddstr(6,1,string.format("sending stale msg to %s %d", stats.ip, stats.port))
-			ok, err = udp:sendto('1111\n', stats.ip, stats.port)
-			if ok then
-				clientscr:mvaddstr(8,1,"ok!")
-			else
-				clientscr:mvaddstr(8,1,"sending stale msg to" .. err)
+		if isFreshClient(clientId, now) and stats.ip and stats.ports then
+			for p= 1,#stats.ports do
+				local p = stats.ports[p]
+				if p then
+					--clientscr:mvaddstr(row,1,string.format("sending stale msg to %s %d", stats.ip, p))
+					row = row + 1
+					ok, err = udp:sendto("1\n", stats.ip, p)
+					clientscr:refresh()
+				end
 			end
-			clientscr:refresh()
 		end
 	end
 end
@@ -1258,11 +1269,6 @@ if #arg > 0 then
 	--print("Loading backup: " .. arg[1])
 	loadFile(arg[1])
 end
-
--- How many iterations to wait before saving a checkpoint
-SAVE_EVERY = 9999999 -- every 3.3 generations
--- How many iterations ago we last saved
-lastSaved = 0
 
 -- The last generation we saved
 lastGenerationSaved = pool.generation
@@ -1307,6 +1313,17 @@ while true do
 
 		clientId = toks[1]
 
+		-- Remember client ip and port if they are a known client
+		local client_ip, client_port = client:getpeername()
+		if clients[clientId] then
+			clients[clientId].ip = client_ip
+			if not clients[clientId].ports then
+				clients[clientId].ports = createAverage(NumPortSize)
+			end
+			addAverage(clients[clientId].ports, tonumber(client_port))
+			clients[clientId].lastCheckIn = socket.gettime()
+		end
+
 		if #toks > 2 then
 			local r_generation = tonumber(toks[2])
 			local r_species = tonumber(toks[3])
@@ -1324,15 +1341,6 @@ while true do
 					staleLevels = 0,
 					lastCheckIn = 0,
 					char = nextClientChar(clients)}
-			end
-
-			local client_ip, client_port = client:getpeername()
-			clients[clientId].ip = client_ip
-			clients[clientId].port = tonumber(client_port)
-			clients[clientId].lastCheckIn = socket.gettime()
-
-			if client_ip and client_port then
-				clientscr:mvaddstr(7,1,string.format("client %s %d", clients[clientId].ip, clients[clientId].port))
 			end
 
 			-- Only use fresh results from new clients (if we haven't already received this result)
@@ -1395,7 +1403,7 @@ while true do
 
 			-- Set client char if available
 			if clients[clientId] then
-				jobs[jobs.__index].client = clients[clientId].char
+				jobs[jobs.index].client = clients[clientId].char
 			end
 		end
 
@@ -1416,17 +1424,15 @@ while true do
 		writeNetwork("backup_network.fitness" .. pool.maxFitness .. ".gen" .. last_generation .. ".genome" .. last_genome .. ".species" .. last_species .. ".NEW_BEST", last_network)
 	end
 
-	-- Save a checkpoint if necessary
-	lastSaved = lastSaved + 1
-	
-	if lastSaved >= SAVE_EVERY then
-		writeFile("backup.checkpoint")
-		lastSaved = 0
-		lastCheckpoint = os.date("%c", os.time())
-	end
+	-- TODO remove if we don't ever want this (or do time based, e.g. every 20 mins)
+	-- if lastSaved >= SAVE_EVERY then
+	-- 	writeFile("backup.checkpoint")
+	-- 	lastSaved = 0
+	-- 	lastCheckpoint = os.date("%c", os.time())
+	-- end
 
 	-- Save a backup of the generation
-	if lastGenerationSaved ~= pool.generation then
+	if lastGenerationSaved + SAVE_EVERY_N_GENERATIONS < pool.generation then
 		writeFile("backup." .. pool.generation .. "." .. "NEW_GENERATION")
 		lastGenerationSaved = pool.generation
 	end
