@@ -2,7 +2,7 @@ local serpent = require("serpent")
 local socket = require("socket")
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 8
+local VERSION_CODE = 9
 
 function initConfigFile()
 	-- Set default config file state here
