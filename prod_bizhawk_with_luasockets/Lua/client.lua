@@ -547,72 +547,81 @@ while true do
 	if response then
 		toks = mysplit(response, "!")
 		response = nil -- Delete response so we don't re-play the level
-		ok, levels = serpent.load(toks[1])
-		iterationId = toks[2]
-		generation = toks[3]
-		currentSpecies = toks[4]
-		currentGenome = toks[5]
-		maxFitness = toks[6]
-		percentage = toks[7]
-		networkStr = toks[8]
 
-		alreadyStale = alreadyStale or shouldStopPlaying()
+		-- Is the server too busy for us?
+		if toks[1] == "wait" then
+			timeout = tonumber(toks[2])
+			console.writeline("sleeping for " .. timeout)
+			socket.sleep(timeout)
+		else
+			-- Otherwise, play a level!
+			ok, levels = serpent.load(toks[1])
+			iterationId = toks[2]
+			generation = toks[3]
+			currentSpecies = toks[4]
+			currentGenome = toks[5]
+			maxFitness = toks[6]
+			percentage = toks[7]
+			networkStr = toks[8]
 
-		-- Play all requested levels
-		for stateId, level in pairs(levels) do
-			if level.a and not alreadyStale then
-				-- Ensure the network is fresh by re-loading it from the string
-				-- TODO: explore ways to reset it robustly?
-				local ok, network = serpent.load(networkStr)
-				local dist, frames, wonLevel, reason = playGame(stateId, network)
-				if config.debug then print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason) end
-				level.d = dist
-				level.f = frames
-				level.w = wonLevel
-				level.r = reason
-			end
 			alreadyStale = alreadyStale or shouldStopPlaying()
-			if alreadyStale then
-				if config.debug then print("STALE! Requesting new and starting from 1-1") end
-				break
+
+			-- Play all requested levels
+			for stateId, level in pairs(levels) do
+				if level.a and not alreadyStale then
+					-- Ensure the network is fresh by re-loading it from the string
+					-- TODO: explore ways to reset it robustly?
+					local ok, network = serpent.load(networkStr)
+					local dist, frames, wonLevel, reason = playGame(stateId, network)
+					if config.debug then print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason) end
+					level.d = dist
+					level.f = frames
+					level.w = wonLevel
+					level.r = reason
+				end
+				alreadyStale = alreadyStale or shouldStopPlaying()
+				if alreadyStale then
+					if config.debug then print("STALE! Requesting new and starting from 1-1") end
+					break
+				end
 			end
-		end
 
-		-- Done playing. Determine if we should kill the emulator.
-		timeToDie = socket.gettime() - start_time > config.killEvery
+			-- Done playing. Determine if we should kill the emulator.
+			timeToDie = socket.gettime() - start_time > config.killEvery
 
-		-- Don't send results if we're already stale. (Happens at end of gen)
-		if not alreadyStale then
-			-- Send it back yo
-			-- TODO just put it all in levels table
-			local results_to_send = config.clientId .. "!"
-					.. generation .. "!"
-					.. currentSpecies .. "!"
-					.. currentGenome .. "!"
-					.. iterationId .. "!" 
-					.. VERSION_CODE .. "!"
-				    .. serpent.dump(levels) .. "!"
-				    .. tostring(timeToDie) .. "\n"
+			-- Don't send results if we're already stale. (Happens at end of gen)
+			if not alreadyStale then
+				-- Send it back yo
+				-- TODO just put it all in levels table
+				local results_to_send = config.clientId .. "!"
+						.. generation .. "!"
+						.. currentSpecies .. "!"
+						.. currentGenome .. "!"
+						.. iterationId .. "!" 
+						.. VERSION_CODE .. "!"
+					    .. serpent.dump(levels) .. "!"
+					    .. tostring(timeToDie) .. "\n"
 
-			local client2, err2 = socket.connect(config.server, config.port)
-			if not err2 then
-				client2:send(results_to_send)
-				-- Set up stale checking using the same IP
-				attemptUDPConnection(client2)
+				local client2, err2 = socket.connect(config.server, config.port)
+				if not err2 then
+					client2:send(results_to_send)
+					-- Set up stale checking using the same IP
+					attemptUDPConnection(client2)
 
-				-- Only try to receive results if we're not going to kill ourselves
-				if not timeToDie then
-					-- The server might send the next level right away
-					maybeResponse, err3 = client2:receive()
-					if not err3 and response ~= "no_level" then
-						if config.debug then print("received next level from two-way connection") end
-						nextResponseToUse = maybeResponse
+					-- Only try to receive results if we're not going to kill ourselves
+					if not timeToDie then
+						-- The server might send the next level right away
+						maybeResponse, err3 = client2:receive()
+						if not err3 and response ~= "no_level" then
+							if config.debug then print("received next level from two-way connection") end
+							nextResponseToUse = maybeResponse
+						end
 					end
 				end
 			end
-		end
-		if client2 then
-			client2:close()
+			if client2 then
+				client2:close()
+			end
 		end
 	else
 		print("No response.")
