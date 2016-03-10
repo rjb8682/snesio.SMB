@@ -8,6 +8,13 @@ local ip, port = server:getsockname()
 -- How many generations do we wait to save?
 SAVE_EVERY_N_GENERATIONS = 5
 
+-- How many clients are allowed to play a level at once
+-- 1 is the absolute minimum, 2/3 preferred
+MAX_SIMULTANEOUS_CLIENTS = 3
+
+-- Increment this when breaking changes are made (will cause old clients to be ignored)
+local VERSION_CODE = 9
+
 -- Where to save backups
 backupDir = "backups_dev_4/"
 
@@ -24,7 +31,7 @@ InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 Inputs = InputSize + 3
 Outputs = #ButtonNames
 
-Population = 50
+Population = 1000
 DeltaDisjoint = 2.0
 DeltaWeights = 0.4
 DeltaThreshold = 1.0
@@ -63,7 +70,7 @@ local ypos = 0
 local bannerscrheight = 4
 local genomescrheight = NUM_DISPLAY_ROWS + 2
 local histoscrheight = 24
-local statscrheight = 33
+local statscrheight = 13
 
 local bannerscr = curses.newwin(bannerscrheight, lcolwidth, ypos, 0)
 ypos = ypos + bannerscrheight - 1
@@ -103,9 +110,6 @@ curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_WHITE);
 
 -- The number of genomes we've run through (times all levels have been played)
 iteration = 0
-
--- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 8
 
 -- New field: totalFrames. TODO: consider using average frames over the last 100
 -- iterations for example. May not be worth the extra work, honestly. Even easier
@@ -241,6 +245,8 @@ function newGenome()
 	genome.network = {}
 	genome.maxneuron = 0
 	genome.globalRank = 0
+	--TODOgenome.request_count = 0
+	genome.last_requested = -1
 	genome.mutationRates = {}
 	genome.mutationRates["connections"] = MutateConnectionsChance
 	genome.mutationRates["link"] = LinkMutationChance
@@ -754,6 +760,8 @@ function generateJobQueue()
 	local jobs = {}
 	for s = 1, #pool.species do
 		for g = 1, #pool.species[s].genomes do
+			-- Reset the request count to 0 for the next generation
+			pool.species[s].genomes[g].request_count = 0
 			table.insert(jobs, {species=s, genome=g})
 		end
 	end
@@ -762,8 +770,6 @@ function generateJobQueue()
 end
 
 function newGeneration()
-	sendStaleMsgToAllClients()
-
 	cullSpecies(false) -- Cull the bottom half of each species
 	rankGlobally()
 	removeStaleSpecies()
@@ -940,7 +946,7 @@ printf = function(s,...)
 
 function printBanner(percentage)
 	-- Print previous results
-	bannerscr:mvaddstr(1,1,string.format("      gen %3d species %3d genome %3d (%3.1f%%)",   last_generation,
+	bannerscr:mvaddstr(1,1,string.format("      gen %3d species %3d genome %3d (%5.1f%%)",   last_generation,
 																					last_species,
 																					last_genome,
 																					percentage))
@@ -1097,7 +1103,7 @@ function printLevelsDisplay()
 end
 
 function printClientsDisplay()
-	clientscr:mvaddstr(1,1," a | id       client | genomes       | frames     | stale")
+	clientscr:mvaddstr(1,1," a | id      client | genomes        | frames     | stale")
 	local totalLevelsPlayed = 0
 	for client, stats in pairs(clients) do
 		totalLevelsPlayed = totalLevelsPlayed + stats.levelsPlayed
@@ -1115,7 +1121,7 @@ function printClientsDisplay()
 			active = "*"
 		end
 		local y, x = clientscr:getyx()
-		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %13s | %7d %4.1f%% | %10d | %5d",
+		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %12s | %7d %5.1f%% | %10d | %5d",
 			active, stats.char, client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
 	end
 	clientscr:refresh()
@@ -1135,7 +1141,6 @@ end
 -- It's a good idea to keep these in sync with SAVE_EVERY (or divisible by)
 local TimeAverageSize = 100
 local FramesAverageSize = 100
-local NumPortSize = 16
 local FitnessAverageSize = Population
 
 function createAverage(size)
@@ -1245,23 +1250,15 @@ function nextClientChar(clients)
 	return string.char(max + 1)
 end
 
-function sendStaleMsgToAllClients()
-	-- Send a warning messaage
-	local now = socket.gettime()
-	local row = 12
-	for clientId, stats in pairs(clients) do
-		if isFreshClient(clientId, now) and stats.ip and stats.ports then
-			for p= 1,#stats.ports do
-				local p = stats.ports[p]
-				if p then
-					--clientscr:mvaddstr(row,1,string.format("sending stale msg to %s %d", stats.ip, p))
-					row = row + 1
-					ok, err = udp:sendto("1\n", stats.ip, p)
-					clientscr:refresh()
-				end
+function findJobIndex(genome, species)
+	if jobs then
+		for index, job in pairs(jobs) do
+			if job.genome == genome and job.species == species then
+				return index
 			end
 		end
 	end
+	return -1
 end
 
 -- Load backup if provided
@@ -1310,20 +1307,9 @@ while true do
 	-- Was it good?
 	if not err then
 		toks = mysplit(line, "!")
-
 		clientId = toks[1]
 
-		-- Remember client ip and port if they are a known client
-		local client_ip, client_port = client:getpeername()
-		if clients[clientId] then
-			clients[clientId].ip = client_ip
-			if not clients[clientId].ports then
-				clients[clientId].ports = createAverage(NumPortSize)
-			end
-			addAverage(clients[clientId].ports, tonumber(client_port))
-			clients[clientId].lastCheckIn = socket.gettime()
-		end
-
+		-- Collect any results that the client returned
 		if #toks > 2 then
 			local r_generation = tonumber(toks[2])
 			local r_species = tonumber(toks[3])
@@ -1342,6 +1328,7 @@ while true do
 					lastCheckIn = 0,
 					char = nextClientChar(clients)}
 			end
+			clients[clientId].lastCheckIn = socket.gettime()
 
 			-- Only use fresh results from new clients (if we haven't already received this result)
 			if r_generation == pool.generation
@@ -1389,21 +1376,31 @@ while true do
 			local species = pool.species[pool.currentSpecies]
 			local genome = species.genomes[pool.currentGenome]
 
-			local response = serpent.dump(levels) .. "!" 
-							.. iteration .. "!" 
-							.. pool.generation .. "!" 
-							.. pool.currentSpecies .. "!" 
-							.. pool.currentGenome .. "!" 
-							.. math.floor(pool.maxFitness) .. "!" 
-							.. "(" .. percentage .. "%)!"
-							.. serpent.dump(genome.network) .. "\n"
-			--levels[nextLevel].lastRequester = clientId
-			client:send(response)
-			genome.last_requested = pool.generation
+			-- TODO: add a decay so that we don't get stuck when unlucky
+			-- e.g. subtract 0.1 every time we're asked
+			if genome.request_count >= MAX_SIMULTANEOUS_CLIENTS then -- true -> if we've already sent it out N times
+				-- Too busy. Make the client wait
+				client:send("wait!0.5\n")
+			else
+				local response = serpent.dump(levels) .. "!" 
+								.. iteration .. "!" 
+								.. pool.generation .. "!" 
+								.. pool.currentSpecies .. "!" 
+								.. pool.currentGenome .. "!" 
+								.. math.floor(pool.maxFitness) .. "!" 
+								.. "(" .. percentage .. "%)!"
+								.. serpent.dump(genome.network) .. "\n"
+				--levels[nextLevel].lastRequester = clientId
+				client:send(response)
+				clientscr:mvaddstr(6,6,pool.currentSpecies .. " " .. " " .. pool.currentGenome .. "     ")
+				clientscr:refresh()
+				genome.last_requested = pool.generation
+				genome.request_count = genome.request_count + 1
 
-			-- Set client char if available
-			if clients[clientId] then
-				jobs[jobs.index].client = clients[clientId].char
+				-- Set client char if available
+				if clients[clientId] then
+					jobs[jobs.index].client = clients[clientId].char
+				end
 			end
 		end
 
