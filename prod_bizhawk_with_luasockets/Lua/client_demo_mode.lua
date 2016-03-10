@@ -1,8 +1,10 @@
 local serpent = require("serpent")
 local socket = require("socket")
 
-config = {server="snes.bluefile.org", port=67617, drawGui=true, drawGenome=true, debug=true, clientId="demo"}
+config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=false, clientId="demo"}
 print("Using " .. config.server .. ":" .. config.port)
+
+client.speedmode(100)
 
 ----------------- INPUTS ----------------------------
 Filename = "1.State"
@@ -333,6 +335,7 @@ function playGame(stateIndex, genome)
 		
 		-- Advance frame since we didn't win / die
 		currentFrame = currentFrame + 1
+		collectgarbage()
 		emu.frameadvance()
 
 		if config.drawGenome then
@@ -545,9 +548,9 @@ while true do
 	emu.frameadvance()
 
 	-- Get the first genome
-	repeat
+	while not response do
 		response = getNewGenome()
-	until response
+	end
 
 	maxFitness = 0
 	for z = 1, 32 do
@@ -559,8 +562,10 @@ while true do
 
 		-- Check for a new genome
 		local newGenome = getNewGenome()
-		if newGenome then
+		if newGenome and response ~= newGenome then
 			response = newGenome
+			print("Got a new network")
+			break
 		end
 
 	end
