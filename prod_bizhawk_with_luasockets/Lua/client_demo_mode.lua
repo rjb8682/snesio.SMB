@@ -548,9 +548,9 @@ while true do
 	emu.frameadvance()
 
 	-- Get the first genome
-	repeat
+	while not response do
 		response = getNewGenome()
-	until response
+	end
 
 	maxFitness = 0
 	for z = 1, 32 do
@@ -562,8 +562,10 @@ while true do
 
 		-- Check for a new genome
 		local newGenome = getNewGenome()
-		if newGenome then
+		if newGenome and response ~= newGenome then
 			response = newGenome
+			print("Got a new network")
+			break
 		end
 
 	end
