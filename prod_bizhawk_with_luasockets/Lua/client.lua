@@ -43,10 +43,20 @@ function loadConfigFile()
 	if not config.killEvery then
 		config.killEvery = 900
 	end
+
+	-- If clientId set to "hostname", do a DNS lookup
+	if config.clientId == "hostname" then
+		local hostname = socket.dns.gethostname()
+		if hostname then
+			-- Limit to 12 chars
+			config.clientId = string.sub(socket.dns.gethostname(), 1, 12)
+		end
+	end
 end
 loadConfigFile()
 
-print("Using " .. config.server .. ":" .. config.port)
+print("Client: " .. config.clientId)
+print("Server: " .. config.server .. ":" .. config.port)
 
 ----------------- INPUTS ----------------------------
 Filename = "1.State"

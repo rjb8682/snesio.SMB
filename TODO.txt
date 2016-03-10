@@ -1,7 +1,12 @@
+===========================
+DONE AND UNDONE
 Have each client maintain a UDP mailbox
 The server can issue a "stop" message by dropping a bit in these mailboxes
 That way we can avoid all clients checking in a stale result (20 seconds wasted for each client that didn't win the race)
+===========================
 
+===========================
+DONE (clients kill themselves, server respects it
 Each client writes a "dont_kill_me" file while they're playing a level
 Delete the file once results are checked in
 Use presence of this file to avoid killing the clients at a bad time (otherwise, waste 10s per 300s)
@@ -10,10 +15,14 @@ Killscript only kills if it started within N seconds
 (this is bad because it allows stale results)
 The kill script could write a file to send a warning to the clients!
 That way the client doesn't request a new level when it's about to be killed (two-way comunication)
+===========================
 
 Explore the effects of how much variable name length affects communication time (specifically in the neural network)
 
+===========================
+DONE (sort of, I'd like legitimate PDFs of the structure)
 Let's graph the neural networks! This would be great to have on the website
+===========================
 
 Create a "diff" between the last best network and the current best:
 *why* did the new one perform better? Victories, frames, distance, per level basis (22 rows)
@@ -24,17 +33,50 @@ would be great for historical playback + diffing networks
 
 Run server with LuaJIT! Supposed to be significantly faster than 5.1.
 
+===========================
+IN PROGRESS
 Calculate a "frames checked in per second metric":
 (average of time since last result * total frames spent playing all 22 levels on current result)
+===========================
 
+===========================
+DONE
 Write lua script that scores a human playing
 (basically, just cut out the neural network part)
 Can use for estimating human-level Mario ability
 Also use as a demo booth for imagine (who's better? your or the computer)
+===========================
 
 Consider faster serialization
 
+===========================
+DONE
 Imagine: play as mario does
+===========================
 
+Extension: once you're done, tell user how long it took us to train a neural net to perform that well
+
+Crazy Imagine idea: make your own networks?
+
+===========================
+DONE (demo mode)
 Client option to request full genomes rather than genome.network, that we we can watch how the network changes as we evolve from generation zero (great for imagine)
 DEMO OPTION: always send the best genome!!! (new request type) -- watch the network evolving!!
+===========================
+
+Idea for stats pipeline:
+Write all statistics from server to standard out
+Open a pipe to another process that takes in statistics and writes them to form usable by nginx
+(e.g. takes stats, converts to JSON, writes files)
+
+FIX LEVELS DISPLAY
+(half-results display second half on first half)
+
+Fix all statistics that rely on time average
+
+Histogram and averages need *full* genome results
+
+Decay for simulataneous requests
+Fixes issue where we get stuck if MAX_SIMULTANEOUS_CLIENTS all go down at once
+
+Normalize x, y velocities (they don't seem to be used until very late in evolution)
