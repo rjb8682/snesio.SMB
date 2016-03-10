@@ -1,7 +1,7 @@
 local serpent = require("serpent")
 local socket = require("socket")
 
-config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=false, clientId="demo"}
+config = {server="129.21.141.143", port=67617, drawGui=false, drawGenome=false, debug=false, clientId="demo"}
 print("Using " .. config.server .. ":" .. config.port)
 
 client.speedmode(100)
@@ -552,6 +552,8 @@ while true do
 		response = getNewGenome()
 	end
 
+	printResult = true
+
 	maxFitness = 0
 	for z = 1, 32 do
 		-- Avoid castles and water levels
@@ -565,9 +567,12 @@ while true do
 		if newGenome and response ~= newGenome then
 			response = newGenome
 			print("Got a new network")
+			printResult = false
 			break
 		end
 
 	end
-	print("Total max fitness: " .. maxFitness)
+	if printResult then
+		print("Total max fitness: " .. maxFitness)
+	end
 end
