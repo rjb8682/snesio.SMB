@@ -71,3 +71,10 @@ Open a pipe to another process that takes in statistics and writes them to form 
 
 FIX LEVELS DISPLAY
 (half-results display second half on first half)
+
+Fix all statistics that rely on time average
+
+Histogram and averages need *full* genome results
+
+Decay for simulataneous requests
+Fixes issue where we get stuck if MAX_SIMULTANEOUS_CLIENTS all go down at once
