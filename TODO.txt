@@ -78,3 +78,5 @@ Histogram and averages need *full* genome results
 
 Decay for simulataneous requests
 Fixes issue where we get stuck if MAX_SIMULTANEOUS_CLIENTS all go down at once
+
+Normalize x, y velocities (they don't seem to be used until very late in evolution)
