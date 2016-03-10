@@ -12,6 +12,12 @@ SAVE_EVERY_N_GENERATIONS = 5
 -- 1 is the absolute minimum, 2/3 preferred
 MAX_SIMULTANEOUS_CLIENTS = 3
 
+-- How many seconds a client should wait when there are no available levels
+CLIENT_WAIT_TIME = 0.5
+
+-- How long we've told clients to wait
+totalWaitingTime = 0
+
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
 local VERSION_CODE = 9
 
@@ -31,7 +37,7 @@ InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 Inputs = InputSize + 3
 Outputs = #ButtonNames
 
-Population = 1000
+Population = 50
 DeltaDisjoint = 2.0
 DeltaWeights = 0.4
 DeltaThreshold = 1.0
@@ -106,6 +112,7 @@ curses.start_color()
 curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK);
 curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
 curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_WHITE);
+curses.init_pair(4, curses.COLOR_CYAN, curses.COLOR_BLACK);
 -----------------
 
 -- The number of genomes we've run through (times all levels have been played)
@@ -115,7 +122,7 @@ iteration = 0
 -- iterations for example. May not be worth the extra work, honestly. Even easier
 -- is resetting totalFrames every so often for a similar effect.
 levels = {
-	{a = true},  -- 1-1
+	{a = true, lype = "full"},  -- 1-1
 	{a = true},  -- 1-2
 	{a = true},  -- 1-3
 	{a = false}, -- 1-4, castle
@@ -149,30 +156,108 @@ levels = {
 	{a = false}  -- 8-4, castle
 }
 
+levelsFirstHalf = {
+	{a = true, lype = "first"},  -- 1-1
+	{a = true},  -- 1-2
+	{a = true},  -- 1-3
+	{a = false}, -- 1-4, castle
+	{a = true},  -- 2-1
+	{a = false}, -- 2-2, water level
+	{a = true},  -- 2-3
+	{a = false}, -- 2-4, castle
+	{a = true},  -- 3-1
+	{a = true},  -- 3-2
+	{a = true},  -- 3-3
+	{a = false}, -- 3-4, castle
+	{a = true},  -- 4-1
+	{a = true},  -- 4-2
+	{a = true},  -- 4-3
+	{a = false}, -- 4-4, castle
+	{a = false},  -- 5-1
+	{a = false},  -- 5-2,
+	{a = false},  -- 5-3
+	{a = false}, -- 5-4, castle
+	{a = false},  -- 6-1
+	{a = false},  -- 6-2
+	{a = false},  -- 6-3
+	{a = false}, -- 6-4, castle
+	{a = false},  -- 7-1
+	{a = false}, -- 7-2, water level
+	{a = false},  -- 7-3
+	{a = false}, -- 7-4, castle
+	{a = false},  -- 8-1
+	{a = false},  -- 8-2
+	{a = false},  -- 8-3
+	{a = false}  -- 8-4, castle
+}
+
+levelsSecondHalf = {
+	{a = false, lype = "second"},  -- 1-1
+	{a = false},  -- 1-2
+	{a = false},  -- 1-3
+	{a = false}, -- 1-4, castle
+	{a = false},  -- 2-1
+	{a = false}, -- 2-2, water level
+	{a = false},  -- 2-3
+	{a = false}, -- 2-4, castle
+	{a = false},  -- 3-1
+	{a = false},  -- 3-2
+	{a = false},  -- 3-3
+	{a = false}, -- 3-4, castle
+	{a = false},  -- 4-1
+	{a = false},  -- 4-2
+	{a = false},  -- 4-3
+	{a = false}, -- 4-4, castle
+	{a = true},  -- 5-1
+	{a = true},  -- 5-2,
+	{a = true},  -- 5-3
+	{a = false}, -- 5-4, castle
+	{a = true},  -- 6-1
+	{a = true},  -- 6-2
+	{a = true},  -- 6-3
+	{a = false}, -- 6-4, castle
+	{a = true},  -- 7-1
+	{a = false}, -- 7-2, water level
+	{a = true},  -- 7-3
+	{a = false}, -- 7-4, castle
+	{a = true},  -- 8-1
+	{a = true},  -- 8-2
+	{a = true},  -- 8-3
+	{a = false}  -- 8-4, castle
+}
+
+-- TODO: levels1, 2, 3
+
 jobs = {}
 
 -- This table keeps track of how many results + frames each client has returned
 -- This only increments when a client is the *first* to return a level's result
 clients = {}
 
-function clearLevels()
-	for i = 1, #levels, 1 do
-		if not levels[i].f then
-			levels[i].f = 0
+function clearLevelArr(levelsArr)
+	for i = 1, #levelsArr, 1 do
+		if not levelsArr[i].f then
+			levelsArr[i].f = 0
 		end
-		if not levels[i].timesWon then
-			levels[i].timesWon = 0
+		if not levelsArr[i].timesWon then
+			levelsArr[i].timesWon = 0
 		end
 
-		if not levels[i].totalFrames then
-			levels[i].totalFrames = 0
+		if not levelsArr[i].totalFrames then
+			levelsArr[i].totalFrames = 0
 		end
-		levels[i].fitness = nil
-		levels[i].lastRequester = ""
-		levels[i].reason = ""
+		levelsArr[i].fitness = nil
+		levelsArr[i].lastRequester = ""
+		levelsArr[i].reason = ""
 	end
 	levelIndex = 1
 	iteration = iteration + 1
+end
+
+function clearLevels()
+	clearLevelArr(levels)
+	clearLevelArr(levelsFirstHalf)
+	clearLevelArr(levelsSecondHalf)
 end
 
 function getWorldAndLevel(i)
@@ -245,7 +330,6 @@ function newGenome()
 	genome.network = {}
 	genome.maxneuron = 0
 	genome.globalRank = 0
-	--TODOgenome.request_count = 0
 	genome.last_requested = -1
 	genome.mutationRates = {}
 	genome.mutationRates["connections"] = MutateConnectionsChance
@@ -758,11 +842,26 @@ end
 
 function generateJobQueue()
 	local jobs = {}
+	local startSplittingIndex = Population - math.floor(countActiveClients() / 2)
+	local count = 0
 	for s = 1, #pool.species do
 		for g = 1, #pool.species[s].genomes do
+			count = count + 1
+			-- Time to start splitting?
+			if count >= startSplittingIndex then
+				-- TODO: consider splitting the halves (e.g. do all the first halves first, then all second halves)
+				-- may cause better performance
+				table.insert(jobs, {species=s, genome=g, type="first"})
+				table.insert(jobs, {species=s, genome=g, type="second"})
+			else
+				table.insert(jobs, {species=s, genome=g, type="full"})
+				pool.species[s].genomes[g].request_count = 0
+			end
+
+			pool.species[s].genomes[g].completeness = "none"
+
 			-- Reset the request count to 0 for the next generation
 			pool.species[s].genomes[g].request_count = 0
-			table.insert(jobs, {species=s, genome=g})
 		end
 	end
 	jobs.index = 1
@@ -885,7 +984,7 @@ function fitnessAlreadyMeasured()
 	local species = pool.species[pool.currentSpecies]
 	local genome = species.genomes[pool.currentGenome]
 	
-	return genome.fitness ~= 0
+	return genome.completeness ~= "full"
 end
 
 function writeFile(filename)
@@ -961,28 +1060,53 @@ function printGenomeDisplay()
 	genomescr:move(1,1)
 	for r = 1, NUM_DISPLAY_ROWS do
 		for c = 1, NUM_DISPLAY_COLS do
-			local job = jobs[jobIndex]
-			-- Is the job finished?
-			if pool.species[job.species].genomes[job.genome].fitness ~= 0 then
+			local job1 = jobs[jobIndex]
+			local job2 = nil
+			if job1.type == "first" then
+				-- Skip over the second half of the job
+				jobIndex = jobIndex + 1
+				job2 = jobs[jobIndex]
+			end			
+
+			-- Is the whole job complete?
+			local genome = pool.species[job1.species].genomes[job1.genome]
+			local halfComplete = genome.completeness == "first" or genome.completeness == "second"
+			local complete = genome.completeness == "full"
+
+			local char = " "
+
+			-- Set to blue or green based on completeness
+			if complete then
 				genomescr:attron(curses.color_pair(1))
-				if job.client then	
-					genomescr:addch(job.client)
-				else
-					genomescr:addch("#")
+			elseif halfComplete then
+				genomescr:attron(curses.color_pair(4))
+				statscr:refresh()
+			end
+
+			-- Is the job at least partially finished?
+			if halfComplete or complete then
+				if complete and not job1.client then
+					char = "#"
+				elseif job2 and job2.client then
+					char = job2.client
+				elseif job1.client then	
+					char = job1.client
 				end
-				genomescr:attroff(curses.color_pair(1))
-			else
-				-- Requested?
-				if job.requested then
-					if job.client then
-						genomescr:addch(job.client)
-					else
-						genomescr:addch("o")
-					end
+			-- Requested?
+			elseif job1.requested or job2 and job2.requested then
+				if job2 and job2.client then
+					char = job2.client
+				elseif job1.client then
+					char = job1.client
 				else
-					genomescr:addch(" ")
+					char = "o"
 				end
 			end
+
+			genomescr:addch(char)
+			genomescr:attroff(curses.color_pair(1))
+			genomescr:attroff(curses.color_pair(4))
+
 			jobIndex = jobIndex + 1
 		end
 		y, x = genomescr:getyx()
@@ -1239,6 +1363,20 @@ function isFreshClient(clientId, now)
 	return false
 end
 
+function countActiveClients()
+	local now = socket.gettime()
+	local count = 0
+	for clientId, stats in pairs(clients) do
+		if isFreshClient(clientId, now) then
+			-- Assume that each client represents four emulators
+			count = count + 8
+		end
+	end
+	statscr:mvaddstr(9,1,count .. " active clients")
+	statscr:refresh()
+	return count
+end
+
 function nextClientChar(clients)
 	max = string.byte('a') - 1
 	for clientId, stats in pairs(clients) do
@@ -1259,6 +1397,18 @@ function findJobIndex(genome, species)
 		end
 	end
 	return -1
+end
+
+-- Given a job, returns which set of levels a client should play
+function getLevelsToPlay(job)
+	return levels
+	-- local levelsToPlay = levels
+	-- if job.type == "first" then
+	-- 	return levelsFirstHalf
+	-- elseif job.type == "second" then
+	-- 	return levelsSecondHalf
+	-- end
+	-- return levelsToPlay
 end
 
 -- Load backup if provided
@@ -1330,19 +1480,37 @@ while true do
 			end
 			clients[clientId].lastCheckIn = socket.gettime()
 
+			-- resultType E {"first", "second", "full"}
+			local resultType = r_levels[1].lype
+
 			-- Only use fresh results from new clients (if we haven't already received this result)
 			if r_generation == pool.generation
 				and iterationId == iteration
 				and versionCode == VERSION_CODE
-				and pool.species[r_species].genomes[r_genome].fitness == 0 then
+				and pool.species[r_species].genomes[r_genome].completeness ~= resultType then
+
+				local playedGenome = pool.species[r_species].genomes[r_genome]
 
 				local fitnessResult = calculateTotalFitness(r_levels)
+
+				-- If this is only a half result, add it to what we currently have
+				if resultType == "first" or resultType == "second" then
+					fitnessResult = playedGenome.fitness + fitnessResult
+					if playedGenome.completeness == "none" then
+						playedGenome.completeness = resultType
+					else
+						playedGenome.completeness = "full"
+					end
+				else
+					playedGenome.completeness = "full"
+				end
+
 				lastSumFitness = fitnessResult
-				pool.species[r_species].genomes[r_genome].fitness = fitnessResult
+				playedGenome.fitness = fitnessResult
 				addAverage(fitnessAverages, lastSumFitness)
 
 				if fitnessResult > pool.maxFitness then
-					writeGenome(tostring(fitnessResult) .. ".genome", pool.species[r_species].genomes[r_genome])
+					writeGenome(tostring(fitnessResult) .. ".genome", playedGenome)
 				end
 
 				local totalFrames = sumFrames(r_levels)
@@ -1359,7 +1527,7 @@ while true do
 				last_generation = r_generation
 				last_species = r_species
 				last_genome = r_genome
-				last_network = pool.species[r_species].genomes[r_genome].network
+				last_network = playedGenome.network
 			else
 				-- Didn't make it in time--update stale counter
 				clients[clientId].staleLevels = clients[clientId].staleLevels + 1
@@ -1380,9 +1548,10 @@ while true do
 			-- e.g. subtract 0.1 every time we're asked
 			if genome.request_count >= MAX_SIMULTANEOUS_CLIENTS then -- true -> if we've already sent it out N times
 				-- Too busy. Make the client wait
-				client:send("wait!0.5\n")
+				client:send("wait!" .. CLIENT_WAIT_TIME .. "\n")
+				totalWaitingTime = totalWaitingTime + CLIENT_WAIT_TIME
 			else
-				local response = serpent.dump(levels) .. "!" 
+				local response = serpent.dump(getLevelsToPlay(jobs[jobs.index])) .. "!" 
 								.. iteration .. "!" 
 								.. pool.generation .. "!" 
 								.. pool.currentSpecies .. "!" 
@@ -1447,8 +1616,9 @@ while true do
 		total_frames_session / (endTime - start_of_session)))
 	statscr:mvaddstr(5,1,string.format("%2d conns | %5.3fs waiting | %5.3fs comm",
 		connectionCount, totalTimeWaiting, totalTimeCommunicating))
+	statscr:mvaddstr(6,1,string.format("client wait time: %7.2fs", totalWaitingTime))
 	if lastCheckpoint then
-		statscr:mvaddstr(6,1,"last saved: " .. lastCheckpoint)
+		statscr:mvaddstr(7,1,"last saved: " .. lastCheckpoint)
 	end
 	statscr:refresh()
 end
