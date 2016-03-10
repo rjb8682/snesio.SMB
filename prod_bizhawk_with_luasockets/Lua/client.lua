@@ -576,6 +576,7 @@ while true do
 				if not timeToDie then
 					-- The server might send the next level right away
 					maybeResponse, err3 = client2:receive()
+					-- TODO: delte this and make the client loop simpler. The server never sends no level any more
 					if not err3 and response ~= "no_level" then
 						if config.debug then print("received next level from two-way connection") end
 						nextResponseToUse = maybeResponse

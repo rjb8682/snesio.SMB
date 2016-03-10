@@ -1,8 +1,10 @@
 local serpent = require("serpent")
 local socket = require("socket")
 
-config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=true, clientId="demo"}
+config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=false, clientId="demo"}
 print("Using " .. config.server .. ":" .. config.port)
+
+client.speedmode(100)
 
 ----------------- INPUTS ----------------------------
 Filename = "1.State"
@@ -333,6 +335,7 @@ function playGame(stateIndex, genome)
 		
 		-- Advance frame since we didn't win / die
 		currentFrame = currentFrame + 1
+		collectgarbage()
 		emu.frameadvance()
 
 		if config.drawGenome then
