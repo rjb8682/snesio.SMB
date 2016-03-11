@@ -2,7 +2,8 @@ local serpent = require("serpent")
 local socket = require("socket")
 local server = assert(socket.bind("*", 67617))
 local ip, port = server:getsockname()
-local genomeDir = "backups_dev/genomes/"
+local runName = "300_run" -- Default run to track
+local genomeDir = "/genomes/"
 
 function mysplit(inputstr, sep)
         if sep == nil then
@@ -16,22 +17,29 @@ function mysplit(inputstr, sep)
         return t
 end
 
-function loadFile(filename)
-	local file = io.open(genomeDir .. filename, "r")
-	genome = file:read("*line")
-	file:close()
-	return genome .. "\n"
+function loadFile(filename, dir)
+	if not filename then return nil end
+	local file = io.open(dir .. filename, "r")
+	if file then
+		genome = file:read("*line")
+		file:close()
+		if genome then
+			return genome .. "\n"
+		end
+	end
+	return nil
 end
 
 function getBestGenome(file_table)
 	local bestFile = nil
 	local bestFitness = -1.0
-	local regex = "%d+.%d*"
+	local pat = "%d*%.?%d+"
 	for key, value in pairs(file_table) do
 		toks = mysplit(value)
 		for i, filename in pairs(toks) do
-			if i > 1 and filename then
-				local fitness = string.match(filename, regex)
+			if filename then
+				toks = mysplit(filename, ".genome")
+				local fitness = string.match(filename, pat)
 				if fitness ~= nil then
 					fitness = tonumber(fitness)
 					if fitness > bestFitness then
@@ -42,7 +50,7 @@ function getBestGenome(file_table)
 			end
 		end
 	end
-	print("best: " .. bestFile)
+	print("best: " .. tostring(bestFile))
 	return bestFile
 end
 
@@ -54,6 +62,28 @@ function scandir(directory)
         t[i] = filename
     end
     return t
+end
+
+-- Returns all backup dirs
+function getDirs()
+    local dirs = scandir(".")--{[1]="300_run",[2]="backups_dev"}
+    local currentDirIndex = nil
+    local i = 1
+    for key, value in pairs(dirs) do
+    	if value == ".:" then
+    		currentDirIndex = i
+    	end
+    	dirs[key] = mysplit(value)[1]
+    	i = i + 1
+    end
+
+    -- Remove current dir
+    if currentDirIndex then
+	    table.remove(dirs, currentDirIndex)
+	end
+
+    print(serpent.dump(dirs))
+    return serpent.dump(dirs)
 end
 
 printf = function(s,...)
@@ -68,17 +98,36 @@ while true do
 
 	-- Was it good?
 	if not err and line then
-		print("client connected. sending ")
+		local toks = mysplit(line, "!")
+		local clientId = nil
+		local run = runName
 
-		local file_table = scandir(genomeDir)
-		local genome = loadFile(getBestGenome(file_table))
+        -- Send a list of all runs
+        if toks[1] == "list" then
+            client:send(getDirs() .. "\n")
 
-		-- Send them the best we got!
-		if genome then
-			client:send(genome)
-		else
-			client:send("nothing\n")
-		end
+        -- Send best genome from specified run
+        else
+            -- Use custom dir if specified
+            if #toks > 1 then
+                clientId = toks[1]
+                run = toks[2]
+            end
+
+            local finalDir = run .. genomeDir
+            print("client connected: " .. tostring(clientId))
+            print("using run: " .. run)
+
+            local file_table = scandir(finalDir)
+            local genome = loadFile(getBestGenome(file_table), finalDir)
+
+            -- Send them the best we got!
+            if genome then
+                client:send(genome)
+            else
+                client:send("nothing\n")
+            end
+        end
 	end
 
 	-- done with client, close the object
