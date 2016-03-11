@@ -594,9 +594,11 @@ runsDropDown = forms.dropdown(form, getRunsList(), 10, 150, 350, 40)
 -- y, x, width, height
 loadRunButton = forms.button(form, "Go!", loadRun, 370, 150, 100, 40)
 debug = forms.checkbox(form, "Debug", 300, 50)
+alwaysShowLatest = forms.checkbox(form, "Always show latest", 10, 350)
 
 forms.setproperty(showBanner, "Checked", true)
 forms.setproperty(showNetwork, "Checked", true)
+forms.setproperty(alwaysShowLatest, "Checked", true)
 
 -- TODO: dropdown for all possible runs
 
@@ -630,10 +632,12 @@ while true do
 		-- Check for a new genome
 		local newGenome = getNewGenome()
 		if newGenome and response ~= newGenome then
-			response = newGenome
 			print("Got a new network")
-			printResult = false
-			break
+			if forms.ischecked(alwaysShowLatest) then
+				response = newGenome
+				printResult = false
+				break
+			end
 		end
 
 	end
