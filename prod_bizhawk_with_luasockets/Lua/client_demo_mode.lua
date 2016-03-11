@@ -1,8 +1,13 @@
 local serpent = require("serpent")
 local socket = require("socket")
 
-config = {server="129.21.141.143", port=67617, drawGui=false, drawGenome=false, debug=false, clientId="demo"}
+config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=false, clientId="demo"}
 print("Using " .. config.server .. ":" .. config.port)
+
+-- TODO: Gui to change this value, as well as turn on and off drawGenome / drawGui!
+local runName = "300_run"
+
+local shouldSkip = false
 
 client.speedmode(100)
 
@@ -55,6 +60,12 @@ FreezeTimeoutConstant   = 60	-- 1 second
 MaxNodes = 1000000
 
 wonLevel = false
+
+function dprint(s)
+	if forms.ischecked(debug) then
+		console.writeline(s)
+	end
+end
 
 function getPositions()
 	oldMarioX = marioX
@@ -277,6 +288,10 @@ function playGame(stateIndex, genome)
 
 	-- Play until we die / win
 	while true do
+		if shouldSkip then
+			shouldSkip = false
+			return 0, 0, 0, "skip", 0
+		end
 		-- Decide which inputs to set
 		if currentFrame%4 == 0 then
 			evaluateCurrent(network)
@@ -295,7 +310,7 @@ function playGame(stateIndex, genome)
 
 		local fitness = rightmost - (currentFrame / 4)
 
-		if config.drawGui == true then
+		if forms.ischecked(showBanner) then
 			gui.drawBox(0, 7, 300, 36, 0xD0FFFFFF, 0xD0FFFFFF)
 			local world, level = getWorldAndLevel(stateIndex)
 			local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
@@ -308,28 +323,28 @@ function playGame(stateIndex, genome)
 		if playerState == 6 or playerState == 0x0B or verticalScreenPosition > 1 then
 			local reason = "enemyDeath"
 			if verticalScreenPosition > 1 then reason = "fell" end
-			if config.debug then console.writeline(reason) end
+			dprint(reason)
 			return rightmost, currentFrame, 0, reason, stateIndex
 		end
 
 		-- Did we win? (set in getPositions)
 		if wonLevel then
 			wonLevel = false
-			if config.debug then console.writeline("victory") end
+			dprint("victory")
 			return rightmost, currentFrame, 1, "victory", stateIndex
 		end
 
 		-- Check for freeze timeout
 		freezeTimeout = freezeTimeout - 1
 		if freezeTimeout <= 0 or fitness < -100 then
-			if config.debug then console.writeline("freeze") end
+			dprint("freeze")
 			return rightmost, currentFrame, 0, "freeze", stateIndex
 		end
 
 		-- Check for progress timeout
 		progressTimeout = progressTimeout - 1
 		if progressTimeout <= 0 or fitness < -100 then
-			if config.debug then console.writeline("noProgress") end
+			dprint("noProgress")
 			return rightmost, currentFrame, 0, "noProgress", stateIndex
 		end
 		
@@ -338,7 +353,7 @@ function playGame(stateIndex, genome)
 		collectgarbage()
 		emu.frameadvance()
 
-		if config.drawGenome then
+		if forms.ischecked(showNetwork) then
 			displayGenome(genome)
 		end
 	end
@@ -525,7 +540,7 @@ function getNewGenome()
 	-- Connect to server
 	local client, err = socket.connect(config.server, config.port)
 	if not err then
-		bytes, err = client:send(config.clientId .. "\n")
+		bytes, err = client:send(config.clientId .. "!" .. runName .. "\n")
 		response, err2 = client:receive()
 	end
 
@@ -541,6 +556,40 @@ function getNewGenome()
 	end
 	return nil
 end
+
+function skipLevel()
+	shouldSkip = true
+end
+
+function loadRun()
+	runName = forms.gettext(loadRunTextBox)
+	skipLevel()
+end
+
+local width = 500
+local height = 500
+local lineHeight = 30
+form = forms.newform(width, height, "Demo")
+showBanner = forms.checkbox(form, "Show banner", 5, 5)
+showNetwork = forms.checkbox(form, "Show network", 5, 50)
+skipButton = forms.button(form, "Skip level", skipLevel, 5, 100, 100, 40)
+loadRunTextBox = forms.textbox(form, runName, 200, 25, nil, 100, 150)
+loadRunLabel = forms.label(form, "Load run:", 5, 150, 200, 40)
+-- y, x, width, height
+loadRunButton = forms.button(form, "Go!", loadRun, 300, 150, 100, 40)
+debug = forms.checkbox(form, "Debug", 300, 50)
+
+forms.setproperty(showBanner, "Checked", true)
+forms.setproperty(showNetwork, "Checked", true)
+
+-- TODO: dropdown for all possible runs
+
+-- Hook into event loop so that the form gets destroyed
+function onExit()
+	forms.destroy(form)
+end
+
+event.onexit(onExit)
 
 local response = nil
 -- loop forever waiting for games to play
