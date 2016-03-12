@@ -4,8 +4,7 @@ local socket = require("socket")
 config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=false, clientId="demo"}
 print("Using " .. config.server .. ":" .. config.port)
 
--- TODO: Gui to change this value, as well as turn on and off drawGenome / drawGui!
-local runName = "300_run"
+local runName = "300_run" -- default
 
 local shouldSkip = false
 
@@ -562,25 +561,44 @@ function skipLevel()
 end
 
 function loadRun()
-	runName = forms.gettext(loadRunTextBox)
+	runName = forms.gettext(runsDropDown)
 	skipLevel()
+end
+
+function getRunsList()
+	local client, err = socket.connect(config.server, config.port)
+	if not err then
+		bytes, err = client:send("list\n")
+		response, err2 = client:receive()
+	end
+
+	-- Close the client
+	if client then
+		client:close()
+	end
+
+	ok, runs = serpent.load(response)
+	return runs
 end
 
 local width = 500
 local height = 500
 local lineHeight = 30
 form = forms.newform(width, height, "Demo")
-showBanner = forms.checkbox(form, "Show banner", 5, 5)
-showNetwork = forms.checkbox(form, "Show network", 5, 50)
-skipButton = forms.button(form, "Skip level", skipLevel, 5, 100, 100, 40)
-loadRunTextBox = forms.textbox(form, runName, 200, 25, nil, 100, 150)
-loadRunLabel = forms.label(form, "Load run:", 5, 150, 200, 40)
+showBanner = forms.checkbox(form, "Banner", 10, 10)
+showNetwork = forms.checkbox(form, "Network", 10, 50)
+skipButton = forms.button(form, "Skip level", skipLevel, 10, 100, 100, 40)
+
+runsDropDown = forms.dropdown(form, getRunsList(), 10, 150, 350, 40)
+
 -- y, x, width, height
-loadRunButton = forms.button(form, "Go!", loadRun, 300, 150, 100, 40)
+loadRunButton = forms.button(form, "Go!", loadRun, 370, 150, 100, 40)
 debug = forms.checkbox(form, "Debug", 300, 50)
+alwaysShowLatest = forms.checkbox(form, "Always show latest", 10, 350)
 
 forms.setproperty(showBanner, "Checked", true)
 forms.setproperty(showNetwork, "Checked", true)
+forms.setproperty(alwaysShowLatest, "Checked", true)
 
 -- TODO: dropdown for all possible runs
 
@@ -614,10 +632,12 @@ while true do
 		-- Check for a new genome
 		local newGenome = getNewGenome()
 		if newGenome and response ~= newGenome then
-			response = newGenome
 			print("Got a new network")
-			printResult = false
-			break
+			if forms.ischecked(alwaysShowLatest) then
+				response = newGenome
+				printResult = false
+				break
+			end
 		end
 
 	end
