@@ -2,7 +2,6 @@ local serpent = require("serpent")
 local socket = require("socket")
 local port = 56506
 local server = assert(socket.bind("*", port))
-local udp = assert(socket.udp("*", port))
 local ip, port = server:getsockname()
 
 -- How many generations do we wait to save?
