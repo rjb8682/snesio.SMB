@@ -2,14 +2,13 @@ local serpent = require("serpent")
 local socket = require("socket")
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 690040115
+local VERSION_CODE = 10
 
 function initConfigFile()
 	-- Set default config file state here
 	config = {
 		clientId = "default_name",
 		server = "snes.bluefile.org",
-		port = 56506,
 		demoFile = "",
 		drawGui = false,
 		debug = false,
@@ -37,13 +36,6 @@ function loadConfigFile()
 	if not config.clientId then
 		config.clientId = "default_name"
 	end
-	if not config.server then
-		config.server = "snes.bluefile.org"
-	end
-	if not config.killEvery then
-		config.killEvery = 900
-	end
-
 	-- If clientId set to "hostname", do a DNS lookup
 	if config.clientId == "hostname" then
 		local hostname = socket.dns.gethostname()
@@ -53,7 +45,16 @@ function loadConfigFile()
 		end
 	end
 end
+
+-- TODO: Give config file to clients too!! Better to change it in once place
+-- than to change it both in the config file and the client code
 loadConfigFile()
+config.port = 56507
+config.server = "snes.bluefile.org"
+config.killEvery = 900
+config.debug = false
+config.demoFile = ""
+config.drawGui = false
 
 print("Client: " .. config.clientId)
 print("Server: " .. config.server .. ":" .. config.port)

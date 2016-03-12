@@ -51,7 +51,7 @@ while true do
 			local experiment = getExperiment(currentExperiment)
 			local code_file = experiment.ClientCode
 			-- TODO: change from "client_logic" to based on code_file
-			client:send(getClientCode("client_logic.lua"))
+			client:send(getClientCode("default_client_logic.lua"))
 		elseif toks[1] == "server" then
 			print("hello, server!")
 			local experiment = getExperiment(currentExperiment)

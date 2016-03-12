@@ -19,6 +19,7 @@ print(serpent.block(config))
 
 print("Creating directory name: " .. config.Name)
 io.popen("mkdir " .. config.Name, "r")
+io.popen("mkdir " .. config.Name .. "/genomes")
 local file, err = io.open(config.Name .. "/config", "w")
 assert(file, err)
 file:write(serpent.dump(config))
