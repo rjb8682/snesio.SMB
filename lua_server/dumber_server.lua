@@ -1,22 +1,22 @@
 local serpent = require("serpent")
 local socket = require("socket")
 
--- How many generations do we wait to save?
-SAVE_EVERY_N_MINUTES = 15 * 60
+-- How many minutes do we wait to save?
+local SAVE_EVERY_N_MINUTES = 1 * 60
 
 -- How many clients are allowed to play a level at once
 -- 1 is the absolute minimum, 2/3 preferred
-MAX_SIMULTANEOUS_CLIENTS = 5.5
+local MAX_SIMULTANEOUS_CLIENTS = 4.5
 
 -- How much we reduce a job's "request_count" by when a client requested it.
 -- A nonzero value ensures that any number of clients may fail and we won't get stuck
-DECAY = 0.01
+local DECAY = 0.01
 
 -- How many seconds a client should wait when there are no available levels
-CLIENT_WAIT_TIME = 1.0
+local CLIENT_WAIT_TIME = 1.0
 
 -- How long we've told clients to wait
-totalWaitingTime = 0
+local totalWaitingTime = 0
 
 if #arg == 0 then
 	print("usage: lua server.lua run_name")
@@ -88,13 +88,13 @@ curses.cbreak()
 curses.echo(false)
 curses.nl(true)
 
-NUM_DISPLAY_COLS = 50
-NUM_DISPLAY_ROWS = Population / NUM_DISPLAY_COLS
+local NUM_DISPLAY_COLS = 50
+local NUM_DISPLAY_ROWS = Population / NUM_DISPLAY_COLS
 
 -- left column
 local lcolwidth = NUM_DISPLAY_COLS + 2
 local ypos = 0
-local bannerscrheight = 4
+local bannerscrheight = 6
 local genomescrheight = NUM_DISPLAY_ROWS + 2
 local histoscrheight = 24
 local statscrheight = 13
@@ -115,13 +115,15 @@ local rcolx = lcolwidth + 2
 local levelscr  = curses.newwin(36 - 10, 60, 0, rcolx)
 local clientscr = curses.newwin(clientscrheight, 60, 35 - 10, rcolx)
 
---stdscr:clear()
-bannerscr:clear()
-genomescr:clear()
-histoscr:clear()
-clientscr:clear()
-levelscr:clear()
-statscr:clear()
+function clearAllScreens()
+	bannerscr:clear()
+	genomescr:clear()
+	histoscr:clear()
+	clientscr:clear()
+	levelscr:clear()
+	statscr:clear()
+end
+clearAllScreens()
 
 bannerscr:border('|', '|', '-', '-', '+', '+', '+', '+')
 genomescr:border('|', '|', '-', '-', '+', '+', '+', '+')
@@ -138,12 +140,12 @@ curses.init_pair(4, curses.COLOR_MAGENTA, curses.COLOR_BLACK);
 -----------------
 
 -- The number of genomes we've run through (times all levels have been played)
-iteration = 0
+local iteration = 0
 
 -- New field: totalFrames. TODO: consider using average frames over the last 100
 -- iterations for example. May not be worth the extra work, honestly. Even easier
 -- is resetting totalFrames every so often for a similar effect.
-levels = {
+local levels = {
 	{a = true, lype = "full"},  -- 1-1
 	{a = true},  -- 1-2
 	{a = true},  -- 1-3
@@ -178,7 +180,7 @@ levels = {
 	{a = false}  -- 8-4, castle
 }
 
-levelsFirstHalf = {
+local levelsFirstHalf = {
 	{a = true, lype = "first"},  -- 1-1
 	{a = true},  -- 1-2
 	{a = true},  -- 1-3
@@ -213,7 +215,7 @@ levelsFirstHalf = {
 	{a = false}  -- 8-4, castle
 }
 
-levelsSecondHalf = {
+local levelsSecondHalf = {
 	{a = false, lype = "second"},  -- 1-1
 	{a = false},  -- 1-2
 	{a = false},  -- 1-3
@@ -248,13 +250,11 @@ levelsSecondHalf = {
 	{a = false}  -- 8-4, castle
 }
 
--- TODO: levels1, 2, 3
-
-jobs = {}
+local jobs = {}
 
 -- This table keeps track of how many results + frames each client has returned
 -- This only increments when a client is the *first* to return a level's result
-clients = {}
+local clients = {}
 
 function clearLevelArr(levelsArr)
 	for i = 1, #levelsArr, 1 do
@@ -965,6 +965,8 @@ if pool == nil then
 	initializePool()
 end
 
+-- TODO local pool = pool
+
 function currentJobGenome()
 	io.stderr:write(jobs.index .. "\n")
 	local job = jobs[jobs.index]
@@ -1039,7 +1041,7 @@ function saveConfig()
 	file:close()
 end
 
-function writeBackup(filename)
+function writeBackup(filename, secondsAdded)
 	local backupPath = backupDir .. filename
 	local file = io.open(backupPath, "w")
 	file:write(serpent.dump(pool))
@@ -1052,6 +1054,13 @@ function writeBackup(filename)
 
     -- Remember what our last backup is
 	conf.last_backup_filename = backupPath
+
+    -- Make a note of how long we've trained for
+	if not conf.TimeSpentTraining then
+		conf.TimeSpentTraining = 0
+	end
+	conf.TimeSpentTraining = conf.TimeSpentTraining + secondsAdded
+
 	saveConfig()
 end
 
@@ -1073,17 +1082,15 @@ end
 
 clearLevels()
 
-printf = function(s,...)
-           return io.write(s:format(...))
-         end -- function
-
 function printBanner(percentage)
 	-- Print previous results
-	bannerscr:mvaddstr(1,1,string.format("     gen %4d species %3d genome %3d (%5.1f%%)",   last_generation,
+	bannerscr:mvaddstr(1,1,string.format("              %s", Name))
+	bannerscr:mvaddstr(2,1,string.format("   StopGen: %d StopFitness: %d StopTime: %d", StopGeneration, StopFitness, StopTimeSeconds))
+	bannerscr:mvaddstr(3,1,string.format("     gen %4d species %3d genome %3d (%5.1f%%)",   last_generation,
 																					last_species,
 																					last_genome,
 																					percentage))
-	bannerscr:mvaddstr(2,1,string.format("       fitness: %6d  max fitness: %6d", math.floor(lastSumFitness),
+	bannerscr:mvaddstr(4,1,string.format("       fitness: %6d  max fitness: %6d", math.floor(lastSumFitness),
 																					math.floor(pool.maxFitness)))
 	bannerscr:refresh()
 end
@@ -1214,8 +1221,6 @@ function printLevelsDisplay()
 	levelscr:mvaddstr(1,3,"lvl | times beaten  | reason     | fitness")
 	for i=1, #last_levels do
 		local world, level = getWorldAndLevel(i)
-		-- active for compatibility
-
 		local y, x = levelscr:getyx()
 
 		if levels[i].a then
@@ -1274,7 +1279,7 @@ function printClientsDisplay()
 			active = "*"
 		end
 		local y, x = clientscr:getyx()
-		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %12s | %7d %5.1f%% | %10d | %5.1f",
+		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %12s | %7.1f %5.1f%% | %10d | %5.1f",
 			active, stats.char, client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
 	end
 	clientscr:refresh()
@@ -1441,6 +1446,18 @@ function getLevelsToPlay(jobType)
 	return levels
 end
 
+function reachedStoppingCondition()
+	if StopGeneration > 0 and pool.generation >= StopGeneration then
+		return "Max generation of " .. StopGeneration .. " reached!"
+	elseif StopFitness > 0 and pool.maxFitness >= StopFitness then
+		return "Stopping fitness of " .. StopFitness .. " reached!"
+	elseif StopTimeSeconds > 0 and conf.TimeSpentTraining >= StopTimeSeconds then
+		return "Stopping time of " .. StopTimeSeconds .. " reached!"
+	end
+
+	return false
+end
+
 -- Continue where we left off if possible
 if conf.last_backup_filename then
 	print("Loading backup: " .. conf.last_backup_filename)
@@ -1474,7 +1491,7 @@ local total_frames_session = 0
 
 local hasAchievedNewMaxFitness = false
 
-while true do
+while not reachedStoppingCondition() do
 	local percentage = calculatePercentage()
 	local startTime = socket.gettime()
 
@@ -1578,7 +1595,11 @@ while true do
 				addVictories(r_levels)
 
 				-- Update client stats
-				clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
+				if resultType == "full" then
+					clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
+				else
+					clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 0.5
+				end
 				clients[clientId].framesPlayed = clients[clientId].framesPlayed + totalFrames
 
 				-- TODO: this causes the issues with printing
@@ -1586,7 +1607,6 @@ while true do
 				last_generation = r_generation
 				last_species = r_species
 				last_genome = r_genome
-				last_network = playedGenome.network
 			else
 				-- Didn't make it in time--update stale counter
 				local staleAmount = 0.5
@@ -1653,9 +1673,10 @@ while true do
     if lastGeneration ~= pool.generation then
         lastGeneration = pool.generation
         -- Save a backup of the generation, if it's been long enough (or we won!)
-        if (socket.gettime() - lastSaved) >= SAVE_EVERY_N_MINUTES
+        local timeSinceLastBackup = socket.gettime() - lastSaved
+        if timeSinceLastBackup >= SAVE_EVERY_N_MINUTES
         	or hasAchievedNewMaxFitness then
-            writeBackup("backup." .. pool.generation .. "." .. "NEW_GENERATION")
+            writeBackup("backup." .. pool.generation .. "." .. "NEW_GENERATION", timeSinceLastBackup)
             lastSaved = socket.gettime()
             lastCheckpoint = os.date("%c", os.time())
         end
@@ -1679,3 +1700,6 @@ while true do
 	end
 	statscr:refresh()
 end
+
+clearAllScreens()
+print(reachedStoppingCondition())
