@@ -6,3 +6,4 @@
 *.network
 *.checkpoint
 config.txt
+config.ini
