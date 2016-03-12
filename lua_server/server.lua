@@ -6,18 +6,18 @@ local udp = assert(socket.udp("*", port))
 local ip, port = server:getsockname()
 
 -- How many generations do we wait to save?
-SAVE_EVERY_N_MINUTES = 2 * 60
+SAVE_EVERY_N_MINUTES = 15 * 60
 
 -- How many clients are allowed to play a level at once
 -- 1 is the absolute minimum, 2/3 preferred
-MAX_SIMULTANEOUS_CLIENTS = 4.5
+MAX_SIMULTANEOUS_CLIENTS = 5.5
 
 -- How much we reduce a job's "request_count" by when a client requested it.
 -- A nonzero value ensures that any number of clients may fail and we won't get stuck
-DECAY = 0.05
+DECAY = 0.01
 
 -- How many seconds a client should wait when there are no available levels
-CLIENT_WAIT_TIME = 2.0
+CLIENT_WAIT_TIME = 1.0
 
 -- How long we've told clients to wait
 totalWaitingTime = 0
@@ -26,7 +26,7 @@ totalWaitingTime = 0
 local VERSION_CODE = 9
 
 -- Where to save and load backups from
-backupDir = "100_run/"
+backupDir = "300_run/"
 
 ButtonNames = {
 	"A",
@@ -41,7 +41,10 @@ InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
 Inputs = InputSize + 3
 Outputs = #ButtonNames
 
-Population = 100
+-- TODO: save Population as part of file... Abstract away all these parameters
+-- so I don't have to worry about re-setting them correctly in the future (probably
+-- a config file in the backups dir)
+Population = 300
 DeltaDisjoint = 2.0
 DeltaWeights = 0.4
 DeltaThreshold = 1.0
@@ -880,6 +883,7 @@ function generateJobQueue()
 
 			-- HUGE TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			-- We always over-wrote the fitness before. Now we may add it in two parts
+			-- Is this inefficient by re-measure? Must confirm that mutated genes get 0 fitness
 			pool.species[s].genomes[g].fitness = 0
 
 			-- Set teh corresponding genome to incomplete
@@ -1188,7 +1192,7 @@ function printLevelsDisplay()
 
 		local y, x = levelscr:getyx()
 
-		if last_levels[i].a or last_levels[i].active then
+		if levels[i].a then
 			if last_levels[i].f and last_levels[i].f > 0 then
 				if last_levels[i].r == "victory" then
 					levelscr:attron(curses.color_pair(1))
@@ -1207,7 +1211,7 @@ function printLevelsDisplay()
 			else
 				levelscr:mvaddstr(y+1,1,string.format("  %1d-%1d | %13s |            |", world,
 																									  level,
-																									  "todo"))
+																									  "    "))
 			end
 		else
 			--[[
@@ -1551,6 +1555,7 @@ while true do
 				clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
 				clients[clientId].framesPlayed = clients[clientId].framesPlayed + totalFrames
 
+				-- TODO: this causes the issues with printing
 				last_levels = r_levels
 				last_generation = r_generation
 				last_species = r_species
