@@ -11,6 +11,8 @@ local button_names = {
 local input_size = (box_radius * 2 + 1)*(box_radius * 2 + 1)
 local inputs = input_size + 3 -- marioVX, marioVY, bias
 
+-- TODO: cmd line options for creating (at the very least, name)
+
 local default_experiment = {
 	VERSION_CODE = math.floor(math.random() * 1000000000), -- Don't even THINK about fucking with this
 	Name = "default_experiment",

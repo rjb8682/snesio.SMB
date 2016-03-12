@@ -6,7 +6,7 @@
     "Left",
     "Right"
   },
-  ClientCode = "default_client_logic.lua",
+  ClientCode = "client_logic_300_run.lua",
   CrossoverChance = 0.75,
   DeltaDisjoint = 2,
   DeltaThreshold = 1,
@@ -19,14 +19,17 @@
   LinkMutationChance = 2,
   MaxNodes = 1000000,
   MutateConnectionsChance = 0.25,
-  Name = "default_experiment",
+  Name = "300_run",
   NodeMutationChance = 0.5,
   Outputs = 3,
   PerturbChance = 0.90000000000000002,
   Population = 300,
+  Port = 56506,
   StaleSpecies = 15,
   StepSize = 0.10000000000000001,
-  VERSION_CODE = 690040115,
-  WorldAugmenter = 0.20000000000000001,
-  Port = 56506
+  StopFitness = -1,
+  StopGeneration = -1,
+  StopTimeSeconds = -1,
+  VERSION_CODE = 9,
+  WorldAugmenter = 0.20000000000000001
 }
