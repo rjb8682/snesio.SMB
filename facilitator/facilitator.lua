@@ -6,7 +6,12 @@ local ip, port = server:getsockname()
 
 -- TODO: System to determine current active experiment
 -- maybe servers check in with facilitator? idk
-local currentExperiment = "default.experiment"
+local currentExperiment = "300_run.experiment"
+
+-- TODO: Clients won't kill themselves until they connect... fix this. If the server isn't responding,
+-- they should kill themselves after a few attempts, that way they get repurposed
+
+-- TODO: why are the supposedly split levels not split?
 
 function mysplit(inputstr, sep)
 	if sep == nil then
@@ -51,13 +56,20 @@ while true do
 			local experiment = getExperiment(currentExperiment)
 			local code_file = experiment.ClientCode
 			-- TODO: change from "client_logic" to based on code_file
-			client:send(getClientCode("default_client_logic.lua"))
+			client:send(getClientCode(code_file))
 		elseif toks[1] == "server" then
 			print("hello, server!")
-			local experiment = getExperiment(currentExperiment)
-			local result = serpent.dump(experiment)
-			print(result)
-			client:send(result)
+			if toks[2] then
+				-- TODO: move corresponding experiment from experiments to completed_experiments
+				-- Update currentExperiment
+				print("Experiment complete: " .. toks[2])
+			else
+				local experiment = getExperiment(currentExperiment)
+				local result = serpent.dump(experiment)
+				print("Sending config:")
+				print(result)
+				client:send(result)
+			end
 		end
 
 		-- done with client, close the object

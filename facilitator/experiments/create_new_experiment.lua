@@ -13,6 +13,21 @@ local inputs = input_size + 3 -- marioVX, marioVY, bias
 
 -- TODO: cmd line options for creating (at the very least, name)
 
+
+function calculateFitness(level, stateIndex)
+	local result = level.d
+	local timePenalty = level.f / 10
+	if level.w == 1 then
+		result = result + 5000
+	end
+
+	local world, level = getWorldAndLevel(stateIndex)
+	local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
+
+	return 100 + (multi * result) - timePenalty
+end
+
+
 local default_experiment = {
 	VERSION_CODE = math.floor(math.random() * 1000000000), -- Don't even THINK about fucking with this
 	Name = "default_experiment",
@@ -46,6 +61,8 @@ local default_experiment = {
 
 	WorldAugmenter = 0.2, -- 20% increase in fitness per world (2-4 is 20% more than 1-4)
 	LevelAugmenter = 0.1, -- 10% increase in fitness per level (3-2 is 10% more than 3-1)
+
+	FitnessFunction = calculateFitness, -- Requires loading with {safe:false}
 
 	MaxNodes = 1000000 -- This just needs to be very high,
 }

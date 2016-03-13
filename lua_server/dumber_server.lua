@@ -2,7 +2,7 @@ local serpent = require("serpent")
 local socket = require("socket")
 
 -- How many minutes do we wait to save?
-local SAVE_EVERY_N_MINUTES = 1 * 60
+local SAVE_EVERY_N_MINUTES = 15 * 60
 
 -- How many clients are allowed to play a level at once
 -- 1 is the absolute minimum, 2/3 preferred
@@ -26,6 +26,7 @@ end
 -- Where to save and load backups from
 local backupDir = arg[1] .. "/"
 local configFileName = backupDir .. "config"
+print("Loading config file: " .. configFileName)
 
 function loadConfigFile(filename)
 	local file, err = io.open(filename, "r")
@@ -142,9 +143,6 @@ curses.init_pair(4, curses.COLOR_MAGENTA, curses.COLOR_BLACK);
 -- The number of genomes we've run through (times all levels have been played)
 local iteration = 0
 
--- New field: totalFrames. TODO: consider using average frames over the last 100
--- iterations for example. May not be worth the extra work, honestly. Even easier
--- is resetting totalFrames every so often for a similar effect.
 local levels = {
 	{a = true, lype = "full"},  -- 1-1
 	{a = true},  -- 1-2
@@ -197,11 +195,11 @@ local levelsFirstHalf = {
 	{a = true},  -- 4-2
 	{a = true},  -- 4-3
 	{a = false}, -- 4-4, castle
-	{a = false},  -- 5-1
-	{a = false},  -- 5-2,
-	{a = false},  -- 5-3
+	{a = true},  -- 5-1
+	{a = true},  -- 5-2, [[ NOTE: LEVELSFIRSTHALF NOW INCLUDES WORLD 5]]
+	{a = true},  -- 5-3
 	{a = false}, -- 5-4, castle
-	{a = false},  -- 6-1
+	{a = true},  -- 6-1 [[ NOTE ]] 
 	{a = false},  -- 6-2
 	{a = false},  -- 6-3
 	{a = false}, -- 6-4, castle
@@ -232,11 +230,11 @@ local levelsSecondHalf = {
 	{a = false},  -- 4-2
 	{a = false},  -- 4-3
 	{a = false}, -- 4-4, castle
-	{a = true},  -- 5-1
-	{a = true},  -- 5-2,
-	{a = true},  -- 5-3
+	{a = false},  -- 5-1
+	{a = false},  -- 5-2, [[ NOTE: LEVELSSECONDHALF NO LONGER INCLDUES WORLD 5]]
+	{a = false},  -- 5-3
 	{a = false}, -- 5-4, castle
-	{a = true},  -- 6-1
+	{a = false},  -- 6-1 [[ NOTE ]]
 	{a = true},  -- 6-2
 	{a = true},  -- 6-3
 	{a = false}, -- 6-4, castle
@@ -866,6 +864,8 @@ function generateJobQueue()
 	if activeClients > Population then
 		activeClients = Population
 	end
+	activeClients = Population
+	--activeClients = math.floor(Population / 2)
 	--io.stderr:write("active clients: " .. activeClients .. "\n")
 	local startSplittingIndex = Population - activeClients
 	--io.stderr:write("start splitting at: " .. startSplittingIndex .. "\n")
@@ -876,31 +876,23 @@ function generateJobQueue()
 		for g = 1, #pool.species[s].genomes do
 			count = count + 1
 			-- Time to start splitting?
-			if count >= startSplittingIndex then
-				-- TODO: consider splitting the halves (e.g. do all the first halves first, then all second halves)
-				-- may cause better performance
+			if count > startSplittingIndex then
 				local firstIndex = count
 				local secondIndex = count + activeClients
 				--io.stderr:write("firstIndex: " .. firstIndex .. " secondIndex: " .. secondIndex .. "\n")
-				jobs[firstIndex]  = {species=s, genome=g, type="first", secondHalf=secondIndex}
-				jobs[secondIndex] = {species=s, genome=g, type="second"}
-				jobs[firstIndex].request_count = 0
-				jobs[secondIndex].request_count = 0
+				jobs[firstIndex]  = {species=s, genome=g, type="first", request_count=0, secondHalf=secondIndex}
+				jobs[secondIndex] = {species=s, genome=g, type="second", request_count=0}
 			else
-				jobs[count]   = {species=s, genome=g, type="full"}
-				jobs[count].request_count = 0
-				--io.stderr:write("index: " .. #jobs .. "\n")
+				jobs[count] = {species=s, genome=g, type="full", request_count=0}
+				--io.stderr:write("index: " .. count .. "\n")
 			end
-
-			-- Reset the request count to 0 for the next generation
-			pool.species[s].genomes[g].request_count = 0
 
 			-- HUGE TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			-- We always over-wrote the fitness before. Now we may add it in two parts
 			-- Is this inefficient by re-measure? Must confirm that mutated genes get 0 fitness
 			pool.species[s].genomes[g].fitness = 0
 
-			-- Set teh corresponding genome to incomplete
+			-- Set the corresponding genome to incomplete
 			pool.species[s].genomes[g].completeness = "none"
 		end
 	end
@@ -968,7 +960,6 @@ end
 -- TODO local pool = pool
 
 function currentJobGenome()
-	io.stderr:write(jobs.index .. "\n")
 	local job = jobs[jobs.index]
 	return pool.species[job.species].genomes[job.genome]
 end
@@ -990,7 +981,6 @@ function advanceJobsIndex()
 			jobs.index = 1
 		end
 	until currentJobGenome().completeness ~= "full"
-	jobs[jobs.index].requested = true
 end
 
 -- TODO: make sure we don't send a genome if we just got that genome's results!!
@@ -1009,7 +999,6 @@ function findNextNonRequestedGenome()
 	pool.currentSpecies = jobs[index].species
 	pool.currentGenome = jobs[index].genome
 
-	-- TODO!
 	advanceJobsIndex()
 end
 
@@ -1078,6 +1067,8 @@ function loadBackup(filename)
 	ok2, levels = serpent.load(file:read("*line"))
 	ok3, clients = serpent.load(file:read("*line"))
 	file:close()
+
+	jobs = generateJobQueue()
 end
 
 clearLevels()
@@ -1119,17 +1110,24 @@ function printGenomeDisplay()
 				statscr:refresh()
 			end
 
+			-- Determine client chars
+			local job1Client = job1.client
+			local job2Client = job2
+			if job2 then
+				job2Client = job2.client
+			end
+
 			-- Is the job at least partially finished?
 			if halfComplete or complete then
-				if complete and not job1.client then
-					char = "#"
-				elseif job2 and job2.client then
+				if job2Client then
 					char = job2.client
 				elseif job1.client then	
 					char = job1.client
+				else
+					char = "#"
 				end
 			-- Requested?
-			elseif job1.requested or job2 and job2.requested then
+			elseif job1.request_count > 0 or (job2 and job2.request_count > 0) then
 				if job2 and job2.client then
 					char = job2.client
 				elseif job1.client then
@@ -1425,10 +1423,12 @@ function nextClientChar(clients)
 	return string.char(max + 1)
 end
 
-function findJobIndex(genome, species)
+function findJobIndex(genome, species, resultType)
 	if jobs then
 		for index, job in pairs(jobs) do
-			if job.genome == genome and job.species == species then
+			-- Index is stored in the jobs table
+			if type(job) ~= "number"
+				and job.genome == genome and job.species == species and job.type == resultType then
 				return index
 			end
 		end
@@ -1551,7 +1551,7 @@ while not reachedStoppingCondition() do
 				--io.stderr:write("result for genome: " .. r_species .. " " .. r_genome .. " completeness: " .. playedGenome.completeness .. " fitness: " .. playedGenome.fitness .. "\n")
 
 				-- Mark this client as completing this job
-				local completedJob = jobs[findJobIndex(r_genome, r_species)]
+				local completedJob = jobs[findJobIndex(r_genome, r_species, resultType)]
 				if completedJob then
 					completedJob.client = clients[clientId].char
 				end
@@ -1618,11 +1618,9 @@ while not reachedStoppingCondition() do
 		end
 
 		-- Send the next network to play
-		-- TODO: one table to rule them all
 		if stop_sending_levels ~= "true" then
 			-- Find the first open, non-requested spot.
 			-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
-			findNextNonRequestedGenome()
 			initializeRun()
 			local species = pool.species[pool.currentSpecies]
 			local genome = species.genomes[pool.currentGenome]
@@ -1648,6 +1646,7 @@ while not reachedStoppingCondition() do
 								.. "(" .. percentage .. "%)!"
 								.. serpent.dump(genome.network) .. "\n"
 				--levels[nextLevel].lastRequester = clientId
+				clientscr:mvaddstr(10,1,"last request index: " .. jobs.index .. "    ")
 				client:send(response)
 				genome.last_requested = pool.generation
 				job.request_count = job.request_count + 1
@@ -1656,8 +1655,12 @@ while not reachedStoppingCondition() do
 				if clients[clientId] then
 					jobs[jobs.index].client = clients[clientId].char
 				end
+
 			end
 		end
+
+		-- Advance to the next job in the queue
+		findNextNonRequestedGenome()
 
 		totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
 	else
@@ -1686,11 +1689,11 @@ while not reachedStoppingCondition() do
 	local endTime = socket.gettime()
 	local averageTime = getAverage(timeAverages)
 	local frameAverage = getAverage(frameAverages)
-	statscr:mvaddstr(1,1,string.format("   last: %5.3f", endTime - startTime))
-	statscr:mvaddstr(2,1,string.format("average: %5.3f", averageTime))
-	statscr:mvaddstr(3,1,string.format("frames played per second   (avg): %7.0f",
+	statscr:mvaddstr(1,1,string.format("   last: %5.3f  ", endTime - startTime))
+	statscr:mvaddstr(2,1,string.format("average: %5.3f  ", averageTime))
+	statscr:mvaddstr(3,1,string.format("frames played per second   (avg): %7.0f  ",
 		frameAverage / averageTime))
-	statscr:mvaddstr(4,1,string.format("frames played per second (total): %7.0f",
+	statscr:mvaddstr(4,1,string.format("frames played per second (total): %7.0f  ",
 		total_frames_session / (endTime - start_of_session)))
 	statscr:mvaddstr(5,1,string.format("%2d conns | %5.3fs waiting | %5.3fs comm",
 		connectionCount, totalTimeWaiting, totalTimeCommunicating))
@@ -1703,3 +1706,6 @@ end
 
 clearAllScreens()
 print(reachedStoppingCondition())
+
+-- TODO: Tell the facilitator that this experiment is complete!
+-- Simply a message that says server!Name
