@@ -83,3 +83,5 @@ Normalize x, y velocities (they don't seem to be used until very late in evoluti
 
 https://github.com/pkulchenko/serpent
 Turn some settings off for speed
+
+Add fitness function to experiment config
