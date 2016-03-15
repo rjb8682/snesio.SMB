@@ -181,30 +181,34 @@ local levels = {
 	{a = false}  -- 8-4, castle
 }
 
--- TODO: Be smart about this!!
--- We can compute the best way to create 1 - 22 partitions easily... Use the greedy approach
--- (reverse sort, add to the smallest bucket each time)
---[[
-function createPartitions()
-	partitions = {}
-	for i = 1, NUM_LEVELS do
+-- We compute the serialized genomes lazily
+local serializedNetworks = {}
 
+-- Return a serialized network
+function getSerializedNetwork(t_species, t_genome)
+	-- Lookup key is gen.species.genome
+	local lookup = t_species .. "." .. t_genome
+	-- If it's already present, just return it
+	if serializedNetworks[lookup] then
+		return serializedNetworks[lookup]
+	else
+		-- Otherwise, serialize, place in lookup table, and return
+		local network = dumpTable(pool.species[t_species].genomes[t_genome].network)
+		serializedNetworks[lookup] = network
+		return network
 	end
 end
-local partitions = createPartitions()
-print(serpent.line(partitions))
 
-PATH TO IMPLEMENTATION: Change completeness to be a set, check if the set size == NUM_LEVELS
-when we move to use only this, lype becomes a set of levels
-lype simply becomes a set of levels, rather than first / second
-printing code checks if >= NUM_LEVELS / 2 levels are complete ? we can cycle through colors even ;)
-Completing levels just means adding the results for the levels *not* in the intersection
-(i.e. the set difference contributes to the fitness)
-Then union the genome's completeness with the result set
+function removeSerializedNetwork(t_species, t_genome)
+	local lookup = t_species .. "." .. t_genome
+	serializedNetworks[lookup] = nil
+end
 
-
-TODO: Reuse "template" rather than creating a new table each time
-]]--
+function clearSerializedNetworks()
+	for k, v in pairs(serializedNetworks) do
+		serializedNetworks[k] = nil
+	end
+end
 
 function resultsToSet(results)
 	local res = {}
@@ -866,6 +870,9 @@ function generateJobQueue()
 end
 
 function newGeneration()
+	-- Throw away all serialized network references
+	clearSerializedNetworks()
+
 	genomescr:refresh()
 	cullSpecies(false) -- Cull the bottom half of each species
 	rankGlobally()
@@ -978,23 +985,11 @@ end
 
 
 -- TODO: explode in a good order! (long levels first)
--- Variable-length exploding
 function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
-	-- Make sure that the current index is still valid!!
 	local splitFactor = math.floor(math.min(splitFactor(activeClients, incompleteJobs), NUM_LEVELS))
-	--io.stderr:write(string.format("jobIndex: %d activeClients: %d incompleteJobs: %d splitFactor: %d\n", jobIndex, activeClients, incompleteJobs, splitFactor))
 	if splitFactor > 1 then
 		local job = jobs[jobIndex]
 
-		-- Don't split if this is a smaller unit than the split factor
-		-- E.G. splitFactor = 22, job in question is 5 -> 22 / 5 <= 22, therefore split
-		-- TODO experiment with -2
-		--[[
-		if NUM_LEVELS / Set.size(job.levelsToPlay) <= splitFactor - 2 then
-			-- Only split full jobs for now
-			return
-		end
-		]]--
 		if Set.size(job.levelsToPlay) < NUM_LEVELS then
 			-- Don't split already split levels. TODO avoid this...?
 			return
@@ -1136,16 +1131,6 @@ function printBanner(percentage)
 																					math.floor(pool.maxFitness)))
 	bannerscr:refresh()
 end
-
---[[
-curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK);
-curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
-curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_WHITE);
-curses.init_pair(4, curses.COLOR_MAGENTA, curses.COLOR_BLACK);
-curses.init_pair(5, curses.COLOR_BLUE, curses.COLOR_BLACK);
-curses.init_pair(6, curses.COLOR_CYAN, curses.COLOR_BLACK);
-curses.init_pair(7, curses.COLOR_YELLOW, curses.COLOR_BLACK);
---]]
 
 -- W Y R M B C G
 function setColor(numLevelsComplete)
@@ -1479,8 +1464,6 @@ function countActiveClients()
 	for clientId, stats in pairs(clients) do
 		if isFreshClient(clientId, now) then
 			-- Assume that each client represents four emulators
-			-- Experimenting with multiplying this number to divide the end more
-			-- TODO change lol
 			count = count + 4
 		end
 	end
@@ -1644,6 +1627,9 @@ while not reachedStoppingCondition() do
 
 				-- Are we finished?
 				if Set.size(playedGenome.completeness) == NUM_LEVELS then
+					-- Release the memory for the serialized network
+					removeSerializedNetwork(r_species, r_genome)
+
 					lastSumFitness = fitnessResult
 					addAverage(fitnessAverages, lastSumFitness)
 
@@ -1701,8 +1687,10 @@ while not reachedStoppingCondition() do
 				-- Add some decay so that we don't ever get stuck TODO tweak
 				job.request_count = job.request_count - DECAY
 			else
+				-- TODO: Consider caching this value too
 				local levelsToPlayArr = setToLevelsArr(job.levelsToPlay)
-				--io.stderr:write("sending type: " .. serpent.dump(levelsToPlayArr) .. "\n")
+				local networkToSend = getSerializedNetwork(job.species, job.genome)
+
 				local response = dumpTable(levelsToPlayArr) .. "!" 
 								.. iteration .. "!" 
 								.. pool.generation .. "!" 
@@ -1710,8 +1698,7 @@ while not reachedStoppingCondition() do
 								.. job.genome .. "!" 
 								.. math.floor(pool.maxFitness) .. "!" 
 								.. "(" .. percentage .. "%)!"
-								.. dumpTable(genome.network) .. "\n"
-				--levels[nextLevel].lastRequester = clientId
+								.. networkToSend .. "\n"
 				clientscr:mvaddstr(10,1,"last request index: " .. jobs.index .. "    ")
 				client:send(response)
 				genome.last_requested = pool.generation
@@ -1724,7 +1711,7 @@ while not reachedStoppingCondition() do
 
 		totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
 	else
-		--print("Error: " .. err)
+		io.stderr:write(print("Error: " .. err))
 	end
 
 	-- done with client, close the object
