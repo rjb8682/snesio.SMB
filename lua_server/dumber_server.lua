@@ -953,7 +953,7 @@ end
 
 function splitFactor(numClients, numIncompleteJobs)
 	-- TODO experiment
-    return (numClients * 3) / numIncompleteJobs
+    return (numClients * 5) / numIncompleteJobs
 end
 
 -- TODO: be smarter about this
@@ -1481,7 +1481,7 @@ function countActiveClients()
 			-- Assume that each client represents four emulators
 			-- Experimenting with multiplying this number to divide the end more
 			-- TODO change lol
-			count = count + 10
+			count = count + 4
 		end
 	end
 	statscr:mvaddstr(9,1,count .. " active clients")
