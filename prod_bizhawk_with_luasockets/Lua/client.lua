@@ -1,35 +1,27 @@
 local socket = require("socket")
 
--- TODO: new client config?
-RUN_LOCAL = false
-
 function getClientCode()
-	-- TODO: should we write the file for easier debugging?
 	local client, err = socket.connect("snes.bluefile.org", 56666)
 	if not client then
 		print("Could not reach facilitator: " .. err)
 		return nil
 	end
-
 	client:send("client\n")
-	response, err = client:receive()
+	response, err = client:receive("*a")
 	client:close()
-
 	if not response then
 		print("Facilitator failed: " .. err)
 		return nil
 	end
-
-	return loadstring(response)
+	result, err = loadstring(response)
+	if not result then
+		print("Error loading code: " .. err)
+		return nil
+	end
+	return result
 end
 
-local clientCode = nil
-if RUN_LOCAL then
-	print("Running locally")
-	clientCode = require("client_logic")
-else
-	clientCode = getClientCode()
-end
+clientCode = getClientCode()
 
 if not clientCode then
 	print("Could not load client. Exiting BizHawk")
@@ -37,6 +29,4 @@ if not clientCode then
 	return
 end
 
-while true do
-	clientCode()
-end
+clientCode()
