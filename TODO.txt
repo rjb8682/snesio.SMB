@@ -63,21 +63,32 @@ DONE (demo mode)
 Client option to request full genomes rather than genome.network, that we we can watch how the network changes as we evolve from generation zero (great for imagine)
 DEMO OPTION: always send the best genome!!! (new request type) -- watch the network evolving!!
 ===========================
+ADDENDUM: Allow selecting which genome to play
+===========================
 
 Idea for stats pipeline:
 Write all statistics from server to standard out
 Open a pipe to another process that takes in statistics and writes them to form usable by nginx
 (e.g. takes stats, converts to JSON, writes files)
 
+======================
+DONE
 FIX LEVELS DISPLAY
 (half-results display second half on first half)
+======================
 
 Fix all statistics that rely on time average
 
+=====================
+DONE
 Histogram and averages need *full* genome results
+=====================
 
+====================
+DONE
 Decay for simulataneous requests
 Fixes issue where we get stuck if MAX_SIMULTANEOUS_CLIENTS all go down at once
+====================
 
 Normalize x, y velocities (they don't seem to be used until very late in evolution)
 
@@ -85,3 +96,7 @@ https://github.com/pkulchenko/serpent
 Turn some settings off for speed
 
 Add fitness function to experiment config
+
+Speed optimizations: stop trashing the lua garbage collector
+Fix server freeze when large amount of clients (add socket queue)
+Consider keeping clients connected and using socket.select
