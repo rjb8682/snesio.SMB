@@ -100,3 +100,6 @@ Add fitness function to experiment config
 Speed optimizations: stop trashing the lua garbage collector
 Fix server freeze when large amount of clients (add socket queue)
 Consider keeping clients connected and using socket.select
+
+CACHE SERIALIZING NETWORKS!!!!
+Why serialize the same network 22 times?
