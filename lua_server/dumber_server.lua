@@ -995,36 +995,17 @@ function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
 			return
 		end
 
-		--io.stderr:write("Time to explode!\n")
-		--io.stderr:write("Jobs before:\n" .. serpent.dump(jobs) .. "\n")
-
 		-- Remove the current job
 		local curJob = table.remove(jobs, jobIndex)
 
-		-- TODO: Just split curJob (maybe in half?)
 		local splits = createPartitions(curJob.levelsToPlay, splitFactor)
-		--io.stderr:write("splits created: " .. serpent.dump(splits) .. "\n")
 
 		-- Split it into 22 jobs
 		for i, split in pairs(splits) do
-			--io.stderr:write(i .. " inserting split: " .. Set.tostring(split))
 			table.insert(jobs, jobIndex, {species=job.species, genome=job.genome, levelsToPlay=split, request_count=0})
 		end
-		--io.stderr:write("\nJobs after:\n" .. serpent.dump(jobs) .. "\n")
-		--[[
-		for i = 1, NUM_LEVELS do
-			-- Don't add inactive levels!
-			if levelsSet[i] then
-				-- TODO: be smarter about this (inserting in place is expensive)
-				-- Could add them to the end instead? is that bad?
-				-- Even better would be to replace the current table with an array of tables
-				table.insert(jobs, jobIndex, {species=job.species, genome=job.genome, levelsToPlay=Set.new({i}), request_count=0})
-			end
-		end
-		]]--
 	end
 end
-
 
 -- TODO: make sure we don't send a genome if we just got that genome's results!!
 function findNextNonRequestedGenome()
@@ -1331,7 +1312,7 @@ function printClientsDisplay()
 		end
 		local y, x = clientscr:getyx()
 		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %12s | %7.1f %5.1f%% | %10d | %5.1f",
-			active, stats.char, client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
+			active, stats.char, client, stats.levelsPlayed / 22, percent, stats.framesPlayed, stats.staleLevels / 22))
 	end
 	clientscr:refresh()
 end
