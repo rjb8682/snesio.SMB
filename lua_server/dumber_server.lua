@@ -230,12 +230,12 @@ end
 
 levelsSet = resultsToSet(levels)
 
-io.stderr:write(Set.tostring(levelsSet))
-io.stderr:write("\n")
-io.stderr:write(Set.tostring(resultsToSet(setToLevelsArr(levelsSet))))
-io.stderr:write("\n")
-io.stderr:write(serpent.dump(setToLevelsArr(levelsSet)))
-io.stderr:write("\n")
+--io.stderr:write(Set.tostring(levelsSet))
+--io.stderr:write("\n")
+--io.stderr:write(Set.tostring(resultsToSet(setToLevelsArr(levelsSet))))
+--io.stderr:write("\n")
+--io.stderr:write(serpent.dump(setToLevelsArr(levelsSet)))
+--io.stderr:write("\n")
 
 local jobs = {}
 
@@ -850,7 +850,7 @@ function generateJobQueue()
 		for g = 1, #pool.species[s].genomes do
 			count = count + 1
 			jobs[count] = {species=s, genome=g, levelsToPlay=levelsSet, request_count=0}
-			io.stderr:write("index: " .. count .. "\n")
+			--io.stderr:write("index: " .. count .. "\n")
 
 			-- HUGE TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			-- We always over-wrote the fitness before. Now we may add it in two parts
@@ -982,7 +982,7 @@ end
 function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
 	-- Make sure that the current index is still valid!!
 	local splitFactor = math.floor(math.min(splitFactor(activeClients, incompleteJobs), NUM_LEVELS))
-	io.stderr:write(string.format("jobIndex: %d activeClients: %d incompleteJobs: %d splitFactor: %d\n", jobIndex, activeClients, incompleteJobs, splitFactor))
+	--io.stderr:write(string.format("jobIndex: %d activeClients: %d incompleteJobs: %d splitFactor: %d\n", jobIndex, activeClients, incompleteJobs, splitFactor))
 	if splitFactor > 1 then
 		local job = jobs[jobIndex]
 
@@ -1000,22 +1000,22 @@ function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
 			return
 		end
 
-		io.stderr:write("Time to explode!\n")
-		io.stderr:write("Jobs before:\n" .. serpent.dump(jobs) .. "\n")
+		--io.stderr:write("Time to explode!\n")
+		--io.stderr:write("Jobs before:\n" .. serpent.dump(jobs) .. "\n")
 
 		-- Remove the current job
 		local curJob = table.remove(jobs, jobIndex)
 
 		-- TODO: Just split curJob (maybe in half?)
 		local splits = createPartitions(curJob.levelsToPlay, splitFactor)
-		io.stderr:write("splits created: " .. serpent.dump(splits) .. "\n")
+		--io.stderr:write("splits created: " .. serpent.dump(splits) .. "\n")
 
 		-- Split it into 22 jobs
 		for i, split in pairs(splits) do
-			io.stderr:write(i .. " inserting split: " .. Set.tostring(split))
+			--io.stderr:write(i .. " inserting split: " .. Set.tostring(split))
 			table.insert(jobs, jobIndex, {species=job.species, genome=job.genome, levelsToPlay=split, request_count=0})
 		end
-		io.stderr:write("\nJobs after:\n" .. serpent.dump(jobs) .. "\n")
+		--io.stderr:write("\nJobs after:\n" .. serpent.dump(jobs) .. "\n")
 		--[[
 		for i = 1, NUM_LEVELS do
 			-- Don't add inactive levels!
@@ -1616,13 +1616,11 @@ while not reachedStoppingCondition() do
 				validResultSet = resultSet - playedGenome.completeness
 				staleResultSet = resultSet * playedGenome.completeness
 
-				io.stderr:write("species " .. r_species .. " genome " .. r_genome .. "\n")
-				io.stderr:write("   genome: " .. Set.tostring(playedGenome.completeness) .. " " .. Set.size(playedGenome.completeness) .. "\n")
-				io.stderr:write("resultSet: " .. Set.tostring(resultSet)      .. " " .. Set.size(resultSet) .. "\n")
-				io.stderr:write("    valid: " .. Set.tostring(validResultSet) .. " " .. Set.size(validResultSet) .. "\n")
-				io.stderr:write("    stale: " .. Set.tostring(staleResultSet) .. " " .. Set.size(staleResultSet) .. "\n")
-			else
-				io.stderr:write("playedGenome was nil")
+				--io.stderr:write("species " .. r_species .. " genome " .. r_genome .. "\n")
+				--io.stderr:write("   genome: " .. Set.tostring(playedGenome.completeness) .. " " .. Set.size(playedGenome.completeness) .. "\n")
+				--io.stderr:write("resultSet: " .. Set.tostring(resultSet)      .. " " .. Set.size(resultSet) .. "\n")
+				--io.stderr:write("    valid: " .. Set.tostring(validResultSet) .. " " .. Set.size(validResultSet) .. "\n")
+				--io.stderr:write("    stale: " .. Set.tostring(staleResultSet) .. " " .. Set.size(staleResultSet) .. "\n")
 			end
 
 			-- Only use fresh results from new clients (if we haven't already received this result)
@@ -1632,15 +1630,15 @@ while not reachedStoppingCondition() do
 				and Set.size(playedGenome.completeness) < NUM_LEVELS
 				and Set.size(validResultSet) > 0 then
 
-				io.stderr:write("result for genome: " .. r_species .. " " .. r_genome .. " completeness: " .. Set.tostring(playedGenome.completeness) .. " fitness: " .. playedGenome.fitness .. "\n")
+				--io.stderr:write("result for genome: " .. r_species .. " " .. r_genome .. " completeness: " .. Set.tostring(playedGenome.completeness) .. " fitness: " .. playedGenome.fitness .. "\n")
 
-				io.stderr:write("results and resultsToUse:\n")
-				io.stderr:write(serpent.dump(r_levels))
-				io.stderr:write("\n" .. Set.tostring(validResultSet) .. "\n")
+				--io.stderr:write("results and resultsToUse:\n")
+				--io.stderr:write(serpent.dump(r_levels))
+				--io.stderr:write("\n" .. Set.tostring(validResultSet) .. "\n")
 
 				-- Only compute the fitness for the valid result set
 				local fitnessResult = calculateTotalFitness(r_levels, validResultSet)
-				io.stderr:write("adding fitness: " .. fitnessResult)
+				--io.stderr:write("adding fitness: " .. fitnessResult)
 				playedGenome.fitness = playedGenome.fitness + fitnessResult
 				playedGenome.completeness = playedGenome.completeness + validResultSet
 
@@ -1650,7 +1648,7 @@ while not reachedStoppingCondition() do
 					addAverage(fitnessAverages, lastSumFitness)
 
 					if playedGenome.fitness > pool.maxFitness then
-						io.stderr:write("New max fitness achieved: " .. playedGenome.fitness .. "\n")
+						--io.stderr:write("New max fitness achieved: " .. playedGenome.fitness .. "\n")
 						writeGenome(tostring(playedGenome.fitness) .. ".genome", playedGenome)
 						pool.maxFitness = playedGenome.fitness
 						-- Make sure we save this generation once it's over
@@ -1704,7 +1702,7 @@ while not reachedStoppingCondition() do
 				job.request_count = job.request_count - DECAY
 			else
 				local levelsToPlayArr = setToLevelsArr(job.levelsToPlay)
-				io.stderr:write("sending type: " .. serpent.dump(levelsToPlayArr) .. "\n")
+				--io.stderr:write("sending type: " .. serpent.dump(levelsToPlayArr) .. "\n")
 				local response = dumpTable(levelsToPlayArr) .. "!" 
 								.. iteration .. "!" 
 								.. pool.generation .. "!" 

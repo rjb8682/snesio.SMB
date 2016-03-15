@@ -10,3 +10,5 @@ Automate entire server start process
 -- lua server.lua <config filename> creates a new run from the config file, moves that file to the new backup dir, etc
 
 Client genome count needs to be fractional (half level = 0.5)
+
+Enforce LuaJIT usage
