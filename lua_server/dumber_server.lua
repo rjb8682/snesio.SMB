@@ -11,10 +11,10 @@ local MAX_SIMULTANEOUS_CLIENTS = 4.5
 
 -- How much we reduce a job's "request_count" by when a client requested it.
 -- A nonzero value ensures that any number of clients may fail and we won't get stuck
-local DECAY = 0.001
+local DECAY = 0.05
 
 -- How many seconds a client should wait when there are no available levels
-local CLIENT_WAIT_TIME = 1.0
+local CLIENT_WAIT_TIME = 0.5
 
 -- How long we've told clients to wait
 local totalWaitingTime = 0
@@ -206,76 +206,6 @@ Then union the genome's completeness with the result set
 TODO: Reuse "template" rather than creating a new table each time
 ]]--
 
-local levelsFirstHalf = {
-	{a = true},  -- 1-1
-	{a = true},  -- 1-2
-	{a = true},  -- 1-3
-	{a = false}, -- 1-4, castle
-	{a = true},  -- 2-1
-	{a = false}, -- 2-2, water level
-	{a = true},  -- 2-3
-	{a = false}, -- 2-4, castle
-	{a = true},  -- 3-1
-	{a = true},  -- 3-2
-	{a = true},  -- 3-3
-	{a = false}, -- 3-4, castle
-	{a = true},  -- 4-1
-	{a = true},  -- 4-2
-	{a = true},  -- 4-3
-	{a = false}, -- 4-4, castle
-	{a = true},  -- 5-1
-	{a = true},  -- 5-2, [[ NOTE: LEVELSFIRSTHALF NOW INCLUDES WORLD 5]]
-	{a = true},  -- 5-3
-	{a = false}, -- 5-4, castle
-	{a = true},  -- 6-1 [[ NOTE ]] 
-	{a = false},  -- 6-2
-	{a = false},  -- 6-3
-	{a = false}, -- 6-4, castle
-	{a = false},  -- 7-1
-	{a = false}, -- 7-2, water level
-	{a = false},  -- 7-3
-	{a = false}, -- 7-4, castle
-	{a = false},  -- 8-1
-	{a = false},  -- 8-2
-	{a = false},  -- 8-3
-	{a = false}  -- 8-4, castle
-}
-
-local levelsSecondHalf = {
-	{a = false},  -- 1-1
-	{a = false},  -- 1-2
-	{a = false},  -- 1-3
-	{a = false}, -- 1-4, castle
-	{a = false},  -- 2-1
-	{a = false}, -- 2-2, water level
-	{a = false},  -- 2-3
-	{a = false}, -- 2-4, castle
-	{a = false},  -- 3-1
-	{a = false},  -- 3-2
-	{a = false},  -- 3-3
-	{a = false}, -- 3-4, castle
-	{a = false},  -- 4-1
-	{a = false},  -- 4-2
-	{a = false},  -- 4-3
-	{a = false}, -- 4-4, castle
-	{a = false},  -- 5-1
-	{a = false},  -- 5-2, [[ NOTE: LEVELSSECONDHALF NO LONGER INCLDUES WORLD 5]]
-	{a = false},  -- 5-3
-	{a = false}, -- 5-4, castle
-	{a = false},  -- 6-1 [[ NOTE ]]
-	{a = true},  -- 6-2
-	{a = true},  -- 6-3
-	{a = false}, -- 6-4, castle
-	{a = true},  -- 7-1
-	{a = false}, -- 7-2, water level
-	{a = true},  -- 7-3
-	{a = false}, -- 7-4, castle
-	{a = true},  -- 8-1
-	{a = true},  -- 8-2
-	{a = true},  -- 8-3
-	{a = false}  -- 8-4, castle
-}
-
 function resultsToSet(results)
 	local res = {}
 	for i = 1, #results do
@@ -299,14 +229,8 @@ function setToLevelsArr(set)
 end
 
 levelsSet = resultsToSet(levels)
-levelsFirstHalfSet = resultsToSet(levelsFirstHalf)
-levelsSecondHalfSet = resultsToSet(levelsSecondHalf)
 
 io.stderr:write(Set.tostring(levelsSet))
-io.stderr:write("\n")
-io.stderr:write(Set.tostring(levelsFirstHalfSet))
-io.stderr:write("\n")
-io.stderr:write(Set.tostring(levelsSecondHalfSet))
 io.stderr:write("\n")
 io.stderr:write(Set.tostring(resultsToSet(setToLevelsArr(levelsSet))))
 io.stderr:write("\n")
@@ -321,30 +245,24 @@ local clients = {}
 
 local iteration = 0
 
-function clearLevelArr(levelsArr)
-	for i = 1, #levelsArr, 1 do
-		if not levelsArr[i].f then
-			levelsArr[i].f = 0
+function clearLevels()
+	for i = 1, #levels, 1 do
+		if not levels[i].f then
+			levels[i].f = 0
 		end
-		if not levelsArr[i].timesWon then
-			levelsArr[i].timesWon = 0
+		if not levels[i].timesWon then
+			levels[i].timesWon = 0
 		end
 
-		if not levelsArr[i].totalFrames then
-			levelsArr[i].totalFrames = 0
+		if not levels[i].totalFrames then
+			levels[i].totalFrames = 0
 		end
-		levelsArr[i].fitness = nil
-		levelsArr[i].lastRequester = ""
-		levelsArr[i].reason = ""
+		levels[i].fitness = nil
+		levels[i].lastRequester = ""
+		levels[i].reason = ""
 	end
 	levelIndex = 1
 	iteration = iteration + 1
-end
-
-function clearLevels()
-	clearLevelArr(levels)
-	clearLevelArr(levelsFirstHalf)
-	clearLevelArr(levelsSecondHalf)
 end
 
 function getWorldAndLevel(i)
@@ -927,30 +845,12 @@ end
 
 function generateJobQueue()
 	local jobs = {}
-	local activeClients = countActiveClients()
-	if activeClients > Population then
-		activeClients = Population
-	end
-	io.stderr:write("active clients: " .. activeClients .. "\n")
-	local startSplittingIndex = Population - activeClients
-	io.stderr:write("start splitting at: " .. startSplittingIndex .. "\n")
-	local totalJobs = Population + activeClients
-	io.stderr:write("total jobs: " .. totalJobs .. "\n")
 	local count = 0
 	for s = 1, #pool.species do
 		for g = 1, #pool.species[s].genomes do
 			count = count + 1
-			-- Time to start splitting?
-			if false then--count >= startSplittingIndex then TODO SPLITTING IS OFF
-				local firstIndex = count
-				local secondIndex = count + activeClients
-				io.stderr:write("firstIndex: " .. firstIndex .. " secondIndex: " .. secondIndex .. "\n")
-				jobs[firstIndex]  = {species=s, genome=g, levelsToPlay=levelsFirstHalfSet, request_count=0, secondHalf=secondIndex}
-				jobs[secondIndex] = {species=s, genome=g, levelsToPlay=levelsSecondHalfSet, request_count=0}
-			else
-				jobs[count] = {species=s, genome=g, levelsToPlay=levelsSet, request_count=0}
-				io.stderr:write("index: " .. count .. "\n")
-			end
+			jobs[count] = {species=s, genome=g, levelsToPlay=levelsSet, request_count=0}
+			io.stderr:write("index: " .. count .. "\n")
 
 			-- HUGE TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			-- We always over-wrote the fitness before. Now we may add it in two parts
@@ -959,7 +859,6 @@ function generateJobQueue()
 
 			-- Set the corresponding genome to incomplete
 			pool.species[s].genomes[g].completeness = {} 
-			pool.species[s].genomes[g].requested = false
 		end
 	end
 	jobs.index = 0
@@ -1052,24 +951,72 @@ function advanceJobsIndex()
 	until Set.size(currentJobGenome().completeness) < NUM_LEVELS
 end
 
+function splitFactor(numClients, numIncompleteJobs)
+	-- TODO experiment
+    return (numClients * 3) / numIncompleteJobs
+end
+
+-- TODO: be smarter about this
+function createPartitions(set, numGoalPartitions)
+	local parts = {}
+	for i = 1, numGoalPartitions do
+		parts[#parts + 1] = Set.new({}) 
+	end
+	local cur = 1
+	for level, _ in pairs(set) do
+		parts[cur][level] = true
+
+		cur = cur + 1
+		if cur > #parts then
+			cur = 1
+		end
+	end
+
+	-- TODO: Verify there are no empty sets?
+	return parts
+end
+
+
 -- TODO: explode in a good order! (long levels first)
 -- Variable-length exploding
 function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
 	-- Make sure that the current index is still valid!!
-	if activeClients >= incompleteJobs * NUM_LEVELS then
+	local splitFactor = math.floor(math.min(splitFactor(activeClients, incompleteJobs), NUM_LEVELS))
+	io.stderr:write(string.format("jobIndex: %d activeClients: %d incompleteJobs: %d splitFactor: %d\n", jobIndex, activeClients, incompleteJobs, splitFactor))
+	if splitFactor > 1 then
 		local job = jobs[jobIndex]
-		if Set.size(job.levelsToPlay) < NUM_LEVELS then
+
+		-- Don't split if this is a smaller unit than the split factor
+		-- E.G. splitFactor = 22, job in question is 5 -> 22 / 5 <= 22, therefore split
+		-- TODO experiment with -2
+		--[[
+		if NUM_LEVELS / Set.size(job.levelsToPlay) <= splitFactor - 2 then
 			-- Only split full jobs for now
 			return
 		end
-		io.stderr:write("Time to explode!")
+		]]--
+		if Set.size(job.levelsToPlay) < NUM_LEVELS then
+			-- Don't split already split levels. TODO avoid this...?
+			return
+		end
+
+		io.stderr:write("Time to explode!\n")
+		io.stderr:write("Jobs before:\n" .. serpent.dump(jobs) .. "\n")
 
 		-- Remove the current job
 		local curJob = table.remove(jobs, jobIndex)
 
 		-- TODO: Just split curJob (maybe in half?)
+		local splits = createPartitions(curJob.levelsToPlay, splitFactor)
+		io.stderr:write("splits created: " .. serpent.dump(splits) .. "\n")
 
 		-- Split it into 22 jobs
+		for i, split in pairs(splits) do
+			io.stderr:write(i .. " inserting split: " .. Set.tostring(split))
+			table.insert(jobs, jobIndex, {species=job.species, genome=job.genome, levelsToPlay=split, request_count=0})
+		end
+		io.stderr:write("\nJobs after:\n" .. serpent.dump(jobs) .. "\n")
+		--[[
 		for i = 1, NUM_LEVELS do
 			-- Don't add inactive levels!
 			if levelsSet[i] then
@@ -1079,6 +1026,7 @@ function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
 				table.insert(jobs, jobIndex, {species=job.species, genome=job.genome, levelsToPlay=Set.new({i}), request_count=0})
 			end
 		end
+		]]--
 	end
 end
 
@@ -1469,12 +1417,12 @@ function calculateFitness(level, stateIndex)
 	return 100 + (multi * result) - timePenalty
 end
 
-function calculateTotalFitness(levels, resultsToUse)
+function calculateTotalFitness(lvls, resultsToUse)
 	local total = 0
-	for stateIndex, level in pairs(levels) do
+	for stateIndex = 1, #lvls do
 		-- Only use results that are in resultsToUse
 		if resultsToUse[stateIndex] then
-			total = total + calculateFitness(level, stateIndex)
+			total = total + calculateFitness(lvls[stateIndex], stateIndex)
 		end
 	end
 	return total
@@ -1495,8 +1443,6 @@ function calculatePercentage()
 end
 
 function sumFrames(lvls, resultsToUse)
-	io.stderr:write(serpent.dump(lvls))
-	io.stderr:write("\n" .. Set.tostring(resultsToUse) .. "\n")
 	local totalFrames = 0
 	for i = 1, #lvls do
 		-- Only use results that are in resultsToUse
@@ -1535,7 +1481,7 @@ function countActiveClients()
 			-- Assume that each client represents four emulators
 			-- Experimenting with multiplying this number to divide the end more
 			-- TODO change lol
-			count = count + 40
+			count = count + 10
 		end
 	end
 	statscr:mvaddstr(9,1,count .. " active clients")
@@ -1642,7 +1588,7 @@ while not reachedStoppingCondition() do
 			local r_generation = tonumber(toks[2])
 			local r_species = tonumber(toks[3])
 			local r_genome = tonumber(toks[4])
-			local terationId = tonumber(toks[5])
+			local iterationId = tonumber(toks[5])
 			local versionCode = tonumber(toks[6])
 			local ok, r_levels = serpent.load(toks[7])
 			stop_sending_levels = toks[8]
@@ -1668,7 +1614,7 @@ while not reachedStoppingCondition() do
 			if pool.species[r_species] and pool.species[r_species].genomes[r_genome] then
 				playedGenome = pool.species[r_species].genomes[r_genome]
 				validResultSet = resultSet - playedGenome.completeness
-				staleResultSet = playedGenome.completeness * resultSet
+				staleResultSet = resultSet * playedGenome.completeness
 
 				io.stderr:write("species " .. r_species .. " genome " .. r_genome .. "\n")
 				io.stderr:write("   genome: " .. Set.tostring(playedGenome.completeness) .. " " .. Set.size(playedGenome.completeness) .. "\n")
@@ -1683,28 +1629,33 @@ while not reachedStoppingCondition() do
 			if r_generation == pool.generation
 				and versionCode == VERSION_CODE
 				and playedGenome
-				and Set.size(playedGenome.completeness) ~= NUM_LEVELS
+				and Set.size(playedGenome.completeness) < NUM_LEVELS
 				and Set.size(validResultSet) > 0 then
 
-				--io.stderr:write("result for genome: " .. r_species .. " " .. r_genome .. " completeness: " .. playedGenome.completeness .. " fitness: " .. playedGenome.fitness .. "\n")
+				io.stderr:write("result for genome: " .. r_species .. " " .. r_genome .. " completeness: " .. Set.tostring(playedGenome.completeness) .. " fitness: " .. playedGenome.fitness .. "\n")
+
+				io.stderr:write("results and resultsToUse:\n")
+				io.stderr:write(serpent.dump(r_levels))
+				io.stderr:write("\n" .. Set.tostring(validResultSet) .. "\n")
 
 				-- Only compute the fitness for the valid result set
 				local fitnessResult = calculateTotalFitness(r_levels, validResultSet)
-				fitnessResult = playedGenome.fitness + fitnessResult
-				playedGenome.fitness = fitnessResult
+				io.stderr:write("adding fitness: " .. fitnessResult)
+				playedGenome.fitness = playedGenome.fitness + fitnessResult
 				playedGenome.completeness = playedGenome.completeness + validResultSet
 
 				-- Are we finished?
 				if Set.size(playedGenome.completeness) == NUM_LEVELS then
 					lastSumFitness = fitnessResult
 					addAverage(fitnessAverages, lastSumFitness)
-				end
 
-				if playedGenome.fitness > pool.maxFitness then
-					writeGenome(tostring(playedGenome.fitness) .. ".genome", playedGenome)
-					pool.maxFitness = playedGenome.fitness
-					-- Make sure we save this generation once it's over
-					hasAchievedNewMaxFitness = true
+					if playedGenome.fitness > pool.maxFitness then
+						io.stderr:write("New max fitness achieved: " .. playedGenome.fitness .. "\n")
+						writeGenome(tostring(playedGenome.fitness) .. ".genome", playedGenome)
+						pool.maxFitness = playedGenome.fitness
+						-- Make sure we save this generation once it's over
+						hasAchievedNewMaxFitness = true
+					end
 				end
 
 				local totalFrames = sumFrames(r_levels, validResultSet)
@@ -1737,15 +1688,12 @@ while not reachedStoppingCondition() do
 		if stop_sending_levels ~= "true" then
 			-- Find the first open, non-requested spot.
 			-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
-			initializeRun()
-			local species = pool.species[pool.currentSpecies]
-			local genome = species.genomes[pool.currentGenome]
-			
-			-- Advance to the next job in the queue
 			findNextNonRequestedGenome()
+			initializeRun()
 
 			-- See how many times this job has been requested
 			local job = jobs[jobs.index]
+			local genome = pool.species[job.species].genomes[job.genome]
 
 			if job.request_count >= MAX_SIMULTANEOUS_CLIENTS then -- true -> if we've already sent it out N times
 				-- Too busy. Make the client wait
@@ -1754,15 +1702,14 @@ while not reachedStoppingCondition() do
 
 				-- Add some decay so that we don't ever get stuck TODO tweak
 				job.request_count = job.request_count - DECAY
-
 			else
 				local levelsToPlayArr = setToLevelsArr(job.levelsToPlay)
 				io.stderr:write("sending type: " .. serpent.dump(levelsToPlayArr) .. "\n")
 				local response = dumpTable(levelsToPlayArr) .. "!" 
 								.. iteration .. "!" 
 								.. pool.generation .. "!" 
-								.. pool.currentSpecies .. "!" 
-								.. pool.currentGenome .. "!" 
+								.. job.species .. "!" 
+								.. job.genome .. "!" 
 								.. math.floor(pool.maxFitness) .. "!" 
 								.. "(" .. percentage .. "%)!"
 								.. dumpTable(genome.network) .. "\n"
@@ -1774,7 +1721,6 @@ while not reachedStoppingCondition() do
 					genome.request_char = clients[clientId].char
 				end
 				job.request_count = job.request_count + 1
-				genome.requested = true
 			end
 		end
 
