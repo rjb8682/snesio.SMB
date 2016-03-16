@@ -1,72 +1,87 @@
 local serpent = require("serpent")
 local socket = require("socket")
-local port = 56506
-local server = assert(socket.bind("*", port))
-local ip, port = server:getsockname()
+local Set = require("set")
 
--- How many generations do we wait to save?
-SAVE_EVERY_N_MINUTES = 15 * 60
+-- How many minutes do we wait to save?
+local SAVE_EVERY_N_MINUTES = 15 * 60
 
 -- How many clients are allowed to play a level at once
 -- 1 is the absolute minimum, 2/3 preferred
-MAX_SIMULTANEOUS_CLIENTS = 5.5
+local MAX_SIMULTANEOUS_CLIENTS = 4.5
 
 -- How much we reduce a job's "request_count" by when a client requested it.
 -- A nonzero value ensures that any number of clients may fail and we won't get stuck
-DECAY = 0.01
+local DECAY = 0.05
 
 -- How many seconds a client should wait when there are no available levels
-CLIENT_WAIT_TIME = 1.0
+local CLIENT_WAIT_TIME = 0.5
 
 -- How long we've told clients to wait
-totalWaitingTime = 0
+local totalWaitingTime = 0
 
--- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 9
+if #arg == 0 then
+	print("usage: lua server.lua run_name")
+	return
+end
 
 -- Where to save and load backups from
-backupDir = "300_run/"
+local backupDir = arg[1] .. "/"
+local configFileName = backupDir .. "config"
+print("Loading config file: " .. configFileName)
 
-ButtonNames = {
-	"A",
-	"Left",
-	"Right",
-}
+function loadConfigFile(filename)
+	local file, err = io.open(filename, "r")
+	assert(file, err)
+	result, err = file:read("*all")
+	file:close()
+	assert(result, err)
+	ok, tab = serpent.load(result)
+	assert(tab, ok)
+	return tab
+end
 
--- GA parameters -- 
-BoxRadius = 6
-InputSize = (BoxRadius*2+1)*(BoxRadius*2+1) -- marioVX, marioVY
+local conf = assert(loadConfigFile(configFileName), "Couldn't load config file")
 
-Inputs = InputSize + 3
-Outputs = #ButtonNames
+-------- Read and validate server config -------
+local VERSION_CODE 	= assert(conf.VERSION_CODE)
+local Name 			= assert(conf.Name)
+local Port 			= assert(conf.Port)
 
--- TODO: save Population as part of file... Abstract away all these parameters
--- so I don't have to worry about re-setting them correctly in the future (probably
--- a config file in the backups dir)
-Population = 300
-DeltaDisjoint = 2.0
-DeltaWeights = 0.4
-DeltaThreshold = 1.0
+local StopGeneration 	= assert(conf.StopGeneration)
+local StopTimeSeconds 	= assert(conf.StopTimeSeconds)
+local StopFitness 		= assert(conf.StopFitness)
 
-StaleSpecies = 15
+local BoxRadius	= assert(conf.BoxRadius)
+local InputSize	= assert(conf.InputSize)
+local Inputs	= assert(conf.Inputs)
+local Outputs 	= assert(conf.Outputs)
 
-MutateConnectionsChance = 0.25
-PerturbChance = 0.90
-CrossoverChance = 0.75
-LinkMutationChance = 2.0
-NodeMutationChance = 0.50
-BiasMutationChance = 0.40
-StepSize = 0.1
-DisableMutationChance = 0.4
-EnableMutationChance = 0.2
+local Population 		= assert(conf.Population)
+local DeltaDisjoint 	= assert(conf.DeltaDisjoint)
+local DeltaWeights 		= assert(conf.DeltaWeights)
+local DeltaThreshold	= assert(conf.DeltaThreshold)
 
-WorldAugmenter = 0.2
-LevelAugmenter = 0.1
+local StaleSpecies 				= assert(conf.StaleSpecies)
+local MutateConnectionsChance 	= assert(conf.MutateConnectionsChance)
+local PerturbChance 			= assert(conf.PerturbChance)
+local CrossoverChance 			= assert(conf.CrossoverChance)
+local LinkMutationChance 		= assert(conf.LinkMutationChance)
+local NodeMutationChance 		= assert(conf.NodeMutationChance)
+local BiasMutationChance 		= assert(conf.BiasMutationChance)
+local StepSize 					= assert(conf.StepSize)
+local DisableMutationChance 	= assert(conf.DisableMutationChance)
+local EnableMutationChance 		= assert(conf.EnableMutationChance)
 
-MaxNodes = 1000000
+local WorldAugmenter = assert(conf.WorldAugmenter)
+local LevelAugmenter = assert(conf.LevelAugmenter)
 
-NUM_DISPLAY_COLS = 50
-NUM_DISPLAY_ROWS = Population / NUM_DISPLAY_COLS
+local MaxNodes = assert(conf.MaxNodes)
+-------------------------------------------------
+
+-- Open up sockets
+local server = assert(socket.bind("*", Port))
+local ip, port = server:getsockname()
+print("Running on: " .. ip .. ":" .. port)
 
 ---- Set up curses
 local curses = require("curses")
@@ -74,12 +89,14 @@ curses.initscr()
 curses.cbreak()
 curses.echo(false)
 curses.nl(true)
---local stdscr = curses.stdscr()
+
+local NUM_DISPLAY_COLS = 50
+local NUM_DISPLAY_ROWS = math.ceil(Population / NUM_DISPLAY_COLS)
 
 -- left column
 local lcolwidth = NUM_DISPLAY_COLS + 2
 local ypos = 0
-local bannerscrheight = 4
+local bannerscrheight = 6
 local genomescrheight = NUM_DISPLAY_ROWS + 2
 local histoscrheight = 24
 local statscrheight = 13
@@ -100,13 +117,15 @@ local rcolx = lcolwidth + 2
 local levelscr  = curses.newwin(36 - 10, 60, 0, rcolx)
 local clientscr = curses.newwin(clientscrheight, 60, 35 - 10, rcolx)
 
---stdscr:clear()
-bannerscr:clear()
-genomescr:clear()
-histoscr:clear()
-clientscr:clear()
-levelscr:clear()
-statscr:clear()
+function clearAllScreens()
+	bannerscr:clear()
+	genomescr:clear()
+	histoscr:clear()
+	clientscr:clear()
+	levelscr:clear()
+	statscr:clear()
+end
+clearAllScreens()
 
 bannerscr:border('|', '|', '-', '-', '+', '+', '+', '+')
 genomescr:border('|', '|', '-', '-', '+', '+', '+', '+')
@@ -120,16 +139,15 @@ curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK);
 curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK);
 curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_WHITE);
 curses.init_pair(4, curses.COLOR_MAGENTA, curses.COLOR_BLACK);
+curses.init_pair(5, curses.COLOR_BLUE, curses.COLOR_BLACK);
+curses.init_pair(6, curses.COLOR_CYAN, curses.COLOR_BLACK);
+curses.init_pair(7, curses.COLOR_YELLOW, curses.COLOR_BLACK);
 -----------------
 
--- The number of genomes we've run through (times all levels have been played)
-iteration = 0
-
--- New field: totalFrames. TODO: consider using average frames over the last 100
--- iterations for example. May not be worth the extra work, honestly. Even easier
--- is resetting totalFrames every so often for a similar effect.
-levels = {
-	{a = true, lype = "full"},  -- 1-1
+-- TODO: Make this part of the experiment
+local NUM_LEVELS = 22
+local levels = {
+	{a = true},  -- 1-1
 	{a = true},  -- 1-2
 	{a = true},  -- 1-3
 	{a = false}, -- 1-4, castle
@@ -163,108 +181,92 @@ levels = {
 	{a = false}  -- 8-4, castle
 }
 
-levelsFirstHalf = {
-	{a = true, lype = "first"},  -- 1-1
-	{a = true},  -- 1-2
-	{a = true},  -- 1-3
-	{a = false}, -- 1-4, castle
-	{a = true},  -- 2-1
-	{a = false}, -- 2-2, water level
-	{a = true},  -- 2-3
-	{a = false}, -- 2-4, castle
-	{a = true},  -- 3-1
-	{a = true},  -- 3-2
-	{a = true},  -- 3-3
-	{a = false}, -- 3-4, castle
-	{a = true},  -- 4-1
-	{a = true},  -- 4-2
-	{a = true},  -- 4-3
-	{a = false}, -- 4-4, castle
-	{a = false},  -- 5-1
-	{a = false},  -- 5-2,
-	{a = false},  -- 5-3
-	{a = false}, -- 5-4, castle
-	{a = false},  -- 6-1
-	{a = false},  -- 6-2
-	{a = false},  -- 6-3
-	{a = false}, -- 6-4, castle
-	{a = false},  -- 7-1
-	{a = false}, -- 7-2, water level
-	{a = false},  -- 7-3
-	{a = false}, -- 7-4, castle
-	{a = false},  -- 8-1
-	{a = false},  -- 8-2
-	{a = false},  -- 8-3
-	{a = false}  -- 8-4, castle
-}
+-- We compute the serialized genomes lazily
+local serializedNetworks = {}
 
-levelsSecondHalf = {
-	{a = false, lype = "second"},  -- 1-1
-	{a = false},  -- 1-2
-	{a = false},  -- 1-3
-	{a = false}, -- 1-4, castle
-	{a = false},  -- 2-1
-	{a = false}, -- 2-2, water level
-	{a = false},  -- 2-3
-	{a = false}, -- 2-4, castle
-	{a = false},  -- 3-1
-	{a = false},  -- 3-2
-	{a = false},  -- 3-3
-	{a = false}, -- 3-4, castle
-	{a = false},  -- 4-1
-	{a = false},  -- 4-2
-	{a = false},  -- 4-3
-	{a = false}, -- 4-4, castle
-	{a = true},  -- 5-1
-	{a = true},  -- 5-2,
-	{a = true},  -- 5-3
-	{a = false}, -- 5-4, castle
-	{a = true},  -- 6-1
-	{a = true},  -- 6-2
-	{a = true},  -- 6-3
-	{a = false}, -- 6-4, castle
-	{a = true},  -- 7-1
-	{a = false}, -- 7-2, water level
-	{a = true},  -- 7-3
-	{a = false}, -- 7-4, castle
-	{a = true},  -- 8-1
-	{a = true},  -- 8-2
-	{a = true},  -- 8-3
-	{a = false}  -- 8-4, castle
-}
+-- Return a serialized network
+function getSerializedNetwork(t_species, t_genome)
+	-- Lookup key is gen.species.genome
+	local lookup = t_species .. "." .. t_genome
+	-- If it's already present, just return it
+	if serializedNetworks[lookup] then
+		return serializedNetworks[lookup]
+	else
+		-- Otherwise, serialize, place in lookup table, and return
+		local network = dumpTable(pool.species[t_species].genomes[t_genome].network)
+		serializedNetworks[lookup] = network
+		return network
+	end
+end
 
--- TODO: levels1, 2, 3
+function removeSerializedNetwork(t_species, t_genome)
+	local lookup = t_species .. "." .. t_genome
+	serializedNetworks[lookup] = nil
+end
 
-jobs = {}
+function clearSerializedNetworks()
+	for k, v in pairs(serializedNetworks) do
+		serializedNetworks[k] = nil
+	end
+end
+
+function resultsToSet(results)
+	local res = {}
+	for i = 1, #results do
+		if results[i].a then
+			res[#res+1] = i
+		end
+	end
+	return Set.new(res)
+end
+
+function setToLevelsArr(set)
+	local res = {}
+	for i = 1, #levels do
+		if set[i] then
+			res[i] = {a = true}
+		else
+			res[i] = {a = false}
+		end
+	end
+	return res
+end
+
+levelsSet = resultsToSet(levels)
+
+--io.stderr:write(Set.tostring(levelsSet))
+--io.stderr:write("\n")
+--io.stderr:write(Set.tostring(resultsToSet(setToLevelsArr(levelsSet))))
+--io.stderr:write("\n")
+--io.stderr:write(serpent.dump(setToLevelsArr(levelsSet)))
+--io.stderr:write("\n")
+
+local jobs = {}
 
 -- This table keeps track of how many results + frames each client has returned
 -- This only increments when a client is the *first* to return a level's result
-clients = {}
+local clients = {}
 
-function clearLevelArr(levelsArr)
-	for i = 1, #levelsArr, 1 do
-		if not levelsArr[i].f then
-			levelsArr[i].f = 0
+local iteration = 0
+
+function clearLevels()
+	for i = 1, #levels, 1 do
+		if not levels[i].f then
+			levels[i].f = 0
 		end
-		if not levelsArr[i].timesWon then
-			levelsArr[i].timesWon = 0
+		if not levels[i].timesWon then
+			levels[i].timesWon = 0
 		end
 
-		if not levelsArr[i].totalFrames then
-			levelsArr[i].totalFrames = 0
+		if not levels[i].totalFrames then
+			levels[i].totalFrames = 0
 		end
-		levelsArr[i].fitness = nil
-		levelsArr[i].lastRequester = ""
-		levelsArr[i].reason = ""
+		levels[i].fitness = nil
+		levels[i].lastRequester = ""
+		levels[i].reason = ""
 	end
 	levelIndex = 1
 	iteration = iteration + 1
-end
-
-function clearLevels()
-	clearLevelArr(levels)
-	clearLevelArr(levelsFirstHalf)
-	clearLevelArr(levelsSecondHalf)
 end
 
 function getWorldAndLevel(i)
@@ -847,53 +849,31 @@ end
 
 function generateJobQueue()
 	local jobs = {}
-	local activeClients = countActiveClients() * 1.5
-	if activeClients > Population then
-		activeClients = Population
-	end
-	--io.stderr:write("active clients: " .. activeClients .. "\n")
-	local startSplittingIndex = Population - activeClients
-	--io.stderr:write("start splitting at: " .. startSplittingIndex .. "\n")
-	local totalJobs = Population + activeClients
-	--io.stderr:write("total jobs: " .. totalJobs .. "\n")
 	local count = 0
 	for s = 1, #pool.species do
 		for g = 1, #pool.species[s].genomes do
 			count = count + 1
-			-- Time to start splitting?
-			if count >= startSplittingIndex then
-				-- TODO: consider splitting the halves (e.g. do all the first halves first, then all second halves)
-				-- may cause better performance
-				local firstIndex = count
-				local secondIndex = count + activeClients
-				--io.stderr:write("firstIndex: " .. firstIndex .. " secondIndex: " .. secondIndex .. "\n")
-				jobs[firstIndex]  = {species=s, genome=g, type="first", secondHalf=secondIndex}
-				jobs[secondIndex] = {species=s, genome=g, type="second"}
-				jobs[firstIndex].request_count = 0
-				jobs[secondIndex].request_count = 0
-			else
-				jobs[count]   = {species=s, genome=g, type="full"}
-				jobs[count].request_count = 0
-				--io.stderr:write("index: " .. #jobs .. "\n")
-			end
-
-			-- Reset the request count to 0 for the next generation
-			pool.species[s].genomes[g].request_count = 0
+			jobs[count] = {species=s, genome=g, levelsToPlay=levelsSet, request_count=0}
+			--io.stderr:write("index: " .. count .. "\n")
 
 			-- HUGE TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 			-- We always over-wrote the fitness before. Now we may add it in two parts
 			-- Is this inefficient by re-measure? Must confirm that mutated genes get 0 fitness
 			pool.species[s].genomes[g].fitness = 0
 
-			-- Set teh corresponding genome to incomplete
-			pool.species[s].genomes[g].completeness = "none"
+			-- Set the corresponding genome to incomplete
+			pool.species[s].genomes[g].completeness = {} 
 		end
 	end
-	jobs.index = 1
+	jobs.index = 0
 	return jobs
 end
 
 function newGeneration()
+	-- Throw away all serialized network references
+	clearSerializedNetworks()
+
+	genomescr:refresh()
 	cullSpecies(false) -- Cull the bottom half of each species
 	rankGlobally()
 	removeStaleSpecies()
@@ -950,19 +930,22 @@ if pool == nil then
 	initializePool()
 end
 
+-- TODO local pool = pool
+
 function currentJobGenome()
-	io.stderr:write(jobs.index .. "\n")
+	--io.stderr:write(jobs.index .. "\n")
 	local job = jobs[jobs.index]
 	return pool.species[job.species].genomes[job.genome]
 end
 
-function allJobsComplete()
+function countIncompleteJobs()
+	local count = 0
 	for i = 1, #jobs do
-		if pool.species[jobs[i].species].genomes[jobs[i].genome].completeness ~= "full" then
-			return false
+		if Set.size(pool.species[jobs[i].species].genomes[jobs[i].genome].completeness) < NUM_LEVELS then
+			count = count + 1
 		end
 	end
-	return true
+	return count
 end
 
 -- Advance the index. Assumes there is still a non-finished job available.
@@ -972,8 +955,57 @@ function advanceJobsIndex()
 		if jobs.index > #jobs then
 			jobs.index = 1
 		end
-	until currentJobGenome().completeness ~= "full"
-	jobs[jobs.index].requested = true
+	until Set.size(currentJobGenome().completeness) < NUM_LEVELS
+end
+
+function splitFactor(numClients, numIncompleteJobs)
+	-- TODO experiment
+    return (numClients * 5) / numIncompleteJobs
+end
+
+-- TODO: be smarter about this
+function createPartitions(set, numGoalPartitions)
+	local parts = {}
+	for i = 1, numGoalPartitions do
+		parts[#parts + 1] = Set.new({}) 
+	end
+	local cur = 1
+	for level, _ in pairs(set) do
+		parts[cur][level] = true
+
+		cur = cur + 1
+		if cur > #parts then
+			cur = 1
+		end
+	end
+
+	-- TODO: Verify there are no empty sets?
+	return parts
+end
+
+-- TODO: explode in a good order! (long levels first)
+function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
+	local splitFactor = math.floor(math.min(splitFactor(activeClients, incompleteJobs), NUM_LEVELS))
+	if splitFactor > 1 then
+		local job = jobs[jobIndex]
+
+		if Set.size(job.levelsToPlay) < NUM_LEVELS then
+			-- Don't split already split levels. TODO avoid this...?
+			return
+		end
+
+		-- Remove the current job
+		local curJob = table.remove(jobs, jobIndex)
+
+		local splits = createPartitions(curJob.levelsToPlay, splitFactor)
+
+		-- Split it into 22 jobs
+		for i, split in pairs(splits) do
+			-- Insert in place
+			-- TODO: Explore inserting a subtable composed of the splits, rather than inserting 22 times
+			table.insert(jobs, jobIndex, {species=job.species, genome=job.genome, levelsToPlay=split, request_count=0})
+		end
+	end
 end
 
 -- TODO: make sure we don't send a genome if we just got that genome's results!!
@@ -982,23 +1014,28 @@ function findNextNonRequestedGenome()
 		jobs = generateJobQueue()
 	end
 
+	local incompleteJobs = countIncompleteJobs()
+
 	-- If there are no more jobs, then make a new generation.
-	if allJobsComplete() then
+	if incompleteJobs == 0 then
 		newGeneration()
 	end
 
+	advanceJobsIndex()
+
+	-- Current job we're about to hand out
 	local index = jobs.index
+
+	-- Do we have way too many clients?
+	maybeExplodeJobIndex(jobs, index, countActiveClients(), countIncompleteJobs())
 
 	pool.currentSpecies = jobs[index].species
 	pool.currentGenome = jobs[index].genome
-
-	-- TODO!
-	advanceJobsIndex()
 end
 
 function nextGenome()
-    statscr:mvaddstr(1,1,"in nextGenome" .. pool.currentGenome .. " " .. pool.currentSpecies)    
-    statscr:refresh()
+	statscr:mvaddstr(1,1,"in nextGenome" .. pool.currentGenome .. " " .. pool.currentSpecies)    
+	statscr:refresh()
 	pool.currentGenome = pool.currentGenome + 1
 	if pool.currentGenome > #pool.species[pool.currentSpecies].genomes then
 		pool.currentGenome = 1
@@ -1010,106 +1047,136 @@ function nextGenome()
 	end
 end
 
-function fitnessAlreadyMeasured()
-	local species = pool.species[pool.currentSpecies]
-	local genome = species.genomes[pool.currentGenome]
-	
-	return genome.completeness ~= "full"
+function dumpTable(t)
+	return serpent.dump(t, {nohuge=true})
 end
 
-function writeFile(filename)
-	local file = io.open(backupDir .. filename, "w")
-	file:write(serpent.dump(pool))
+-- Saves any changes made to server config
+function saveConfig()
+	local file = io.open(configFileName, "w")
+	file:write(dumpTable(conf))
+	file:close()
+end
+
+function writeBackup(filename, secondsAdded)
+	local backupPath = backupDir .. filename
+	local file = io.open(backupPath, "w")
+	file:write(dumpTable(pool))
 	file:write("\n")
-	file:write(serpent.dump(levels))
+	file:write(dumpTable(levels))
 	file:write("\n")
-	file:write(serpent.dump(clients))
+	file:write(dumpTable(clients))
 	file:write("\n")
-    file:close()
+	file:close()
+
+	-- Remember what our last backup is
+	conf.last_backup_filename = backupPath
+
+	-- Make a note of how long we've trained for
+	if not conf.TimeSpentTraining then
+		conf.TimeSpentTraining = 0
+	end
+	conf.TimeSpentTraining = conf.TimeSpentTraining + secondsAdded
+
+	saveConfig()
 end
 
 function writeGenome(filename, genome)
 	local file = io.open(backupDir .. "genomes/" .. filename, "w")
-	file:write(serpent.dump(genome))
+	file:write(dumpTable(genome))
 	file:write("\n")
 	file:close()
 end
 
-function loadFile(filename)
-	local file = io.open(backupDir .. filename, "r")
+function loadBackup(filename)
+	print("Loading backup: " .. filename)
+	local file = io.open(filename, "r")
 	ok1, pool   = serpent.load(file:read("*line"))
 	ok2, levels = serpent.load(file:read("*line"))
 	ok3, clients = serpent.load(file:read("*line"))
 	file:close()
+
+	jobs = generateJobQueue()
 end
 
-writeFile("temp.pool")
 clearLevels()
-
-printf = function(s,...)
-           return io.write(s:format(...))
-         end -- function
 
 function printBanner(percentage)
 	-- Print previous results
-	bannerscr:mvaddstr(1,1,string.format("     gen %4d species %3d genome %3d (%5.1f%%)",   last_generation,
+	bannerscr:mvaddstr(1,1,string.format("              %s", Name))
+	bannerscr:mvaddstr(2,1,string.format("   StopGen: %d StopFitness: %d StopTime: %d", StopGeneration, StopFitness, StopTimeSeconds))
+	bannerscr:mvaddstr(3,1,string.format("     gen %4d species %3d genome %3d (%5.1f%%)",   last_generation,
 																					last_species,
 																					last_genome,
 																					percentage))
-	bannerscr:mvaddstr(2,1,string.format("       fitness: %6d  max fitness: %6d", math.floor(lastSumFitness),
+	bannerscr:mvaddstr(4,1,string.format("       fitness: %6d  max fitness: %6d", math.floor(lastSumFitness),
 																					math.floor(pool.maxFitness)))
 	bannerscr:refresh()
+end
+
+-- W Y R M B C G
+function setColor(numLevelsComplete)
+	local percentageComplete = (numLevelsComplete / NUM_LEVELS) * 100
+	if percentageComplete < 16.66 then
+		-- white
+	elseif percentageComplete < 33.33 then
+		genomescr:attron(curses.color_pair(7)) -- yellow
+	elseif percentageComplete < 49.99 then
+		genomescr:attron(curses.color_pair(2)) -- red
+	elseif percentageComplete < 66.66 then
+		genomescr:attron(curses.color_pair(4)) -- magenta
+	elseif percentageComplete < 83.33 then
+		genomescr:attron(curses.color_pair(5)) -- blue
+	elseif percentageComplete < 99.99 then
+		genomescr:attron(curses.color_pair(6)) -- cyan
+	else
+		genomescr:attron(curses.color_pair(1)) -- green
+	end
 end
 
 -- TODO: This assumes those that requested it also checked it in. 
 function printGenomeDisplay()
 	local jobIndex = 1
 	genomescr:move(1,1)
+	local s = 1
+	local g = 1			
 	for r = 1, NUM_DISPLAY_ROWS do
 		for c = 1, NUM_DISPLAY_COLS do
-			local job1 = jobs[jobIndex]
-			local job2 = jobs[job1.secondHalf]
+			if g > #pool.species[s].genomes then
+				g = 1
+				s = s + 1
+				if s > #pool.species then
+					genomescr:refresh()
+					return
+				end
+			end
 
 			-- Is the whole job complete?
-			local genome = pool.species[job1.species].genomes[job1.genome]
-			local halfComplete = genome.completeness == "first" or genome.completeness == "second"
-			local complete = genome.completeness == "full"
+			local genome = pool.species[s].genomes[g]
+			if not genome then return end
 
-			local char = " "
-
-			-- Set to blue or green based on completeness
-			if complete then
-				genomescr:attron(curses.color_pair(1))
-			elseif halfComplete then
-				genomescr:attron(curses.color_pair(4))
-				statscr:refresh()
-			end
-
-			-- Is the job at least partially finished?
-			if halfComplete or complete then
-				if complete and not job1.client then
-					char = "#"
-				elseif job2 and job2.client then
-					char = job2.client
-				elseif job1.client then	
-					char = job1.client
-				end
 			-- Requested?
-			elseif job1.requested or job2 and job2.requested then
-				if job2 and job2.client then
-					char = job2.client
-				elseif job1.client then
-					char = job1.client
+			local char = " "
+			if genome.last_requested == pool.generation then
+				if genome.request_char then
+					char = genome.request_char
 				else
-					char = "o"
+					char = "#"
 				end
 			end
+
+			setColor(Set.size(genome.completeness))
 
 			genomescr:addch(char)
 			genomescr:attroff(curses.color_pair(1))
+			genomescr:attroff(curses.color_pair(2))
+			genomescr:attroff(curses.color_pair(3))
 			genomescr:attroff(curses.color_pair(4))
-
+			genomescr:attroff(curses.color_pair(5))
+			genomescr:attroff(curses.color_pair(6))
+			genomescr:attroff(curses.color_pair(7))
 			jobIndex = jobIndex + 1
+			g = g + 1
 		end
 		y, x = genomescr:getyx()
 		genomescr:move(y+1, 1)
@@ -1187,12 +1254,10 @@ function printLevelsDisplay()
 	levelscr:mvaddstr(1,3,"lvl | times beaten  | reason     | fitness")
 	for i=1, #last_levels do
 		local world, level = getWorldAndLevel(i)
-		-- active for compatibility
-
 		local y, x = levelscr:getyx()
 
 		if levels[i].a then
-			if last_levels[i].f and last_levels[i].f > 0 then
+			if last_levels[i].a then
 				if last_levels[i].r == "victory" then
 					levelscr:attron(curses.color_pair(1))
 				end
@@ -1208,9 +1273,9 @@ function printLevelsDisplay()
 				levelscr:attroff(curses.color_pair(1))
 				levelscr:attroff(curses.color_pair(2))
 			else
-				levelscr:mvaddstr(y+1,1,string.format("  %1d-%1d | %13s |            |", world,
-																									  level,
-																									  "    "))
+				levelscr:mvaddstr(y+1,1,string.format("  %1d-%1d | %13s |            |                ", world,
+																							level,
+																							levels[i].timesWon))
 			end
 		else
 			--[[
@@ -1247,8 +1312,8 @@ function printClientsDisplay()
 			active = "*"
 		end
 		local y, x = clientscr:getyx()
-		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %12s | %7d %5.1f%% | %10d | %5.1f",
-			active, stats.char, client, stats.levelsPlayed, percent, stats.framesPlayed, stats.staleLevels))
+		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %12s | %7.1f %5.1f%% | %10d | %5.1f",
+			active, stats.char, client, stats.levelsPlayed / 22, percent, stats.framesPlayed, stats.staleLevels / 22))
 	end
 	clientscr:refresh()
 end
@@ -1264,9 +1329,8 @@ end
 ------------------------------- Averages --------------------------------
 -- Keep track of the last N values to keep a rolling average
 
--- It's a good idea to keep these in sync with SAVE_EVERY (or divisible by)
-local TimeAverageSize = 100
-local FramesAverageSize = 100
+local TimeAverageSize = math.floor(Population * 3)
+local FramesAverageSize = math.floor(Population * 3)
 local FitnessAverageSize = Population
 
 function createAverage(size)
@@ -1305,6 +1369,9 @@ fitnessAverages = createAverage(FitnessAverageSize)
 --------------------------- End averages --------------------------------
 
 function calculateFitness(level, stateIndex)
+	if not level.a then
+		return 0
+	end
 	local result = level.d
 	local timePenalty = level.f / 10
 	if level.w == 1 then
@@ -1317,11 +1384,12 @@ function calculateFitness(level, stateIndex)
 	return 100 + (multi * result) - timePenalty
 end
 
-function calculateTotalFitness(levels)
+function calculateTotalFitness(lvls, resultsToUse)
 	local total = 0
-	for stateIndex, level in pairs(levels) do
-		if level.a then
-			total = total + calculateFitness(level, stateIndex)
+	for stateIndex = 1, #lvls do
+		-- Only use results that are in resultsToUse
+		if resultsToUse[stateIndex] then
+			total = total + calculateFitness(lvls[stateIndex], stateIndex)
 		end
 	end
 	return total
@@ -1334,28 +1402,33 @@ function calculatePercentage()
 	for _,species in pairs(pool.species) do
 		for _,genome in pairs(species.genomes) do
 			total = total + 1
-			if genome.completeness == "full" then
-				measured = measured + 1
-			elseif genome.completeness ~= "first" or genome.completeness == "second" then
-				measured = measured + 0.5
-			end
+			-- TODO cache set size
+			measured = measured + (Set.size(genome.completeness) / NUM_LEVELS)
 		end
 	end
 	return (measured / total) * 100
 end
 
-function sumFrames(lvls)
+function sumFrames(lvls, resultsToUse)
 	local totalFrames = 0
 	for i = 1, #lvls do
-		totalFrames = totalFrames + lvls[i].f
+		-- Only use results that are in resultsToUse
+		if resultsToUse[i] then
+			totalFrames = totalFrames + lvls[i].f
+		end
 	end
 	return totalFrames
 end
 
-function addVictories(results)
+-- Add victory and frame statistics to the levels array
+function addStats(results, resultsToUse)
 	for i = 1, #results do
-		if results[i].r == "victory" then
-			levels[i].timesWon = levels[i].timesWon + 1
+		-- Only use results that are in resultsToUse
+		if resultsToUse[i] then
+			if results[i].r == "victory" then
+				levels[i].timesWon = levels[i].timesWon + 1
+			end
+			levels[i].totalFrames = levels[i].totalFrames + results[i].f
 		end
 	end
 end
@@ -1373,8 +1446,7 @@ function countActiveClients()
 	for clientId, stats in pairs(clients) do
 		if isFreshClient(clientId, now) then
 			-- Assume that each client represents four emulators
-			-- Experimenting with multiplying this number to divide the end more
-			count = count + 6
+			count = count + 4
 		end
 	end
 	statscr:mvaddstr(9,1,count .. " active clients")
@@ -1393,10 +1465,11 @@ function nextClientChar(clients)
 	return string.char(max + 1)
 end
 
-function findJobIndex(genome, species)
+function findJobIndex(genome, species, resultType)
 	if jobs then
 		for index, job in pairs(jobs) do
-			if job.genome == genome and job.species == species then
+			if type(job) ~= "number"
+				and job.genome == genome and job.species == species and job.type == resultType then
 				return index
 			end
 		end
@@ -1404,20 +1477,28 @@ function findJobIndex(genome, species)
 	return -1
 end
 
--- Given a job, returns which set of levels a client should play
-function getLevelsToPlay(jobType)
-	if jobType == "first" then
-		return levelsFirstHalf
-	elseif jobType == "second" then
-		return levelsSecondHalf
+function reachedStoppingCondition()
+	if StopGeneration > 0 and pool.generation >= StopGeneration then
+		return "Max generation of " .. StopGeneration .. " reached!"
+	elseif StopFitness > 0 and pool.maxFitness >= StopFitness then
+		return "Stopping fitness of " .. StopFitness .. " reached!"
+	elseif StopTimeSeconds > 0 and conf.TimeSpentTraining >= StopTimeSeconds then
+		return "Stopping time of " .. StopTimeSeconds .. " reached!"
 	end
-	return levels
+
+	return false
 end
 
--- Load backup if provided
-if #arg > 0 then
-	--print("Loading backup: " .. arg[1])
-	loadFile(arg[1])
+--------------------- Partitioning ----------------------
+
+
+-- Continue where we left off if possible
+if conf.last_backup_filename then
+	print("Loading backup: " .. conf.last_backup_filename)
+	loadBackup(conf.last_backup_filename)
+else
+	-- Otherwise, first-time setup
+	jobs = generateJobQueue()
 end
 
 -- Used for detecting generation change
@@ -1447,7 +1528,9 @@ local total_frames_session = 0
 
 local hasAchievedNewMaxFitness = false
 
-while true do
+local TIME_TO_STOP = false
+
+while not TIME_TO_STOP do
 	local percentage = calculatePercentage()
 	local startTime = socket.gettime()
 
@@ -1488,70 +1571,74 @@ while true do
 			end
 			clients[clientId].lastCheckIn = socket.gettime()
 
-			-- resultType E {"first", "second", "full"}
-			local resultType = r_levels[1].lype
+			local resultSet = resultsToSet(r_levels)
+
+			-- Assume non valid / completely stale unless there's a corresponding genome
+			local validResultSet = {}
+			local staleResultSet = resultSet
 
 			local playedGenome = nil
 			if pool.species[r_species] and pool.species[r_species].genomes[r_genome] then
 				playedGenome = pool.species[r_species].genomes[r_genome]
+				validResultSet = resultSet - playedGenome.completeness
+				staleResultSet = resultSet * playedGenome.completeness
+
+				--io.stderr:write("species " .. r_species .. " genome " .. r_genome .. "\n")
+				--io.stderr:write("   genome: " .. Set.tostring(playedGenome.completeness) .. " " .. Set.size(playedGenome.completeness) .. "\n")
+				--io.stderr:write("resultSet: " .. Set.tostring(resultSet)      .. " " .. Set.size(resultSet) .. "\n")
+				--io.stderr:write("    valid: " .. Set.tostring(validResultSet) .. " " .. Set.size(validResultSet) .. "\n")
+				--io.stderr:write("    stale: " .. Set.tostring(staleResultSet) .. " " .. Set.size(staleResultSet) .. "\n")
 			end
 
 			-- Only use fresh results from new clients (if we haven't already received this result)
 			if r_generation == pool.generation
-				and iterationId == iteration
 				and versionCode == VERSION_CODE
 				and playedGenome
-				and playedGenome.completeness ~= "full"
-				and playedGenome.completeness ~= resultType then
+				and Set.size(playedGenome.completeness) < NUM_LEVELS
+				and Set.size(validResultSet) > 0 then
 
-				--io.stderr:write("result for genome: " .. r_species .. " " .. r_genome .. " completeness: " .. playedGenome.completeness .. " fitness: " .. playedGenome.fitness .. "\n")
+				--io.stderr:write("result for genome: " .. r_species .. " " .. r_genome .. " completeness: " .. Set.tostring(playedGenome.completeness) .. " fitness: " .. playedGenome.fitness .. "\n")
 
-				-- Mark this client as completing this job
-				local completedJob = jobs[findJobIndex(r_genome, r_species)]
-				if completedJob then
-					completedJob.client = clients[clientId].char
-				end
+				--io.stderr:write("results and resultsToUse:\n")
+				--io.stderr:write(serpent.dump(r_levels))
+				--io.stderr:write("\n" .. Set.tostring(validResultSet) .. "\n")
 
-				local fitnessResult = calculateTotalFitness(r_levels)
+				-- Only compute the fitness for the valid result set
+				local fitnessResult = calculateTotalFitness(r_levels, validResultSet)
+				--io.stderr:write("adding fitness: " .. fitnessResult)
+				playedGenome.fitness = playedGenome.fitness + fitnessResult
+				playedGenome.completeness = playedGenome.completeness + validResultSet
 
-				-- If this is only a half result, add it to what we currently have
-				if resultType == "first" or resultType == "second" then
-					fitnessResult = playedGenome.fitness + fitnessResult
-					if playedGenome.completeness == "none" then
-						playedGenome.completeness = resultType
-					else
-						playedGenome.completeness = "full"
-					end
-				else
-					playedGenome.completeness = "full"
-				end
+				-- Are we finished?
+				if Set.size(playedGenome.completeness) == NUM_LEVELS then
+					-- Release the memory for the serialized network
+					removeSerializedNetwork(r_species, r_genome)
 
-				if playedGenome.completeness == "full" then
 					lastSumFitness = fitnessResult
 					addAverage(fitnessAverages, lastSumFitness)
+
+					if playedGenome.fitness > pool.maxFitness then
+						--io.stderr:write("New max fitness achieved: " .. playedGenome.fitness .. "\n")
+						writeGenome(tostring(playedGenome.fitness) .. ".genome", playedGenome)
+						pool.maxFitness = playedGenome.fitness
+						-- Make sure we save this generation once it's over
+						hasAchievedNewMaxFitness = true
+					end
 				end
 
-				playedGenome.fitness = fitnessResult
-
-				if playedGenome.fitness > pool.maxFitness then
-					writeGenome(tostring(playedGenome.fitness) .. ".genome", playedGenome)
-                    pool.maxFitness = playedGenome.fitness
-                    -- Make sure we save this generation once it's over
-                    hasAchievedNewMaxFitness = true
-				end
-
-				local totalFrames = sumFrames(r_levels)
+				local totalFrames = sumFrames(r_levels, validResultSet)
 				addAverage(frameAverages, totalFrames)
 				total_frames_session = total_frames_session + totalFrames
 
 				-- Since we got a valid result, update the times.
 				addAverage(timeAverages, socket.gettime() - startTime)
 
-				-- Add any victories we achieved
-				addVictories(r_levels)
+				-- Add any victories we achieved and frames played
+				addStats(r_levels, validResultSet)
 
 				-- Update client stats
-				clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + 1
+				clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + Set.size(validResultSet)
+				-- TODO: add
 				clients[clientId].framesPlayed = clients[clientId].framesPlayed + totalFrames
 
 				-- TODO: this causes the issues with printing
@@ -1559,29 +1646,22 @@ while true do
 				last_generation = r_generation
 				last_species = r_species
 				last_genome = r_genome
-				last_network = playedGenome.network
 			else
 				-- Didn't make it in time--update stale counter
-				local staleAmount = 0.5
-				if r_levels.lype == "full" then
-					staleAmount = 1.0
-				end
-				clients[clientId].staleLevels = clients[clientId].staleLevels + staleAmount
+				clients[clientId].staleLevels = clients[clientId].staleLevels + Set.size(staleResultSet)
 			end
 		end
 
 		-- Send the next network to play
-		-- TODO: one table to rule them all
 		if stop_sending_levels ~= "true" then
 			-- Find the first open, non-requested spot.
 			-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
 			findNextNonRequestedGenome()
 			initializeRun()
-			local species = pool.species[pool.currentSpecies]
-			local genome = species.genomes[pool.currentGenome]
-			
+
 			-- See how many times this job has been requested
 			local job = jobs[jobs.index]
+			local genome = pool.species[job.species].genomes[job.genome]
 
 			if job.request_count >= MAX_SIMULTANEOUS_CLIENTS then -- true -> if we've already sent it out N times
 				-- Too busy. Make the client wait
@@ -1590,31 +1670,32 @@ while true do
 
 				-- Add some decay so that we don't ever get stuck TODO tweak
 				job.request_count = job.request_count - DECAY
-
 			else
-				local response = serpent.dump(getLevelsToPlay(jobs[jobs.index].type)) .. "!" 
+				-- TODO: Consider caching this value too
+				local levelsToPlayArr = setToLevelsArr(job.levelsToPlay)
+				local networkToSend = getSerializedNetwork(job.species, job.genome)
+
+				local response = dumpTable(levelsToPlayArr) .. "!" 
 								.. iteration .. "!" 
 								.. pool.generation .. "!" 
-								.. pool.currentSpecies .. "!" 
-								.. pool.currentGenome .. "!" 
+								.. job.species .. "!" 
+								.. job.genome .. "!" 
 								.. math.floor(pool.maxFitness) .. "!" 
 								.. "(" .. percentage .. "%)!"
-								.. serpent.dump(genome.network) .. "\n"
-				--levels[nextLevel].lastRequester = clientId
+								.. networkToSend .. "\n"
+				clientscr:mvaddstr(10,1,"last request index: " .. jobs.index .. "    ")
 				client:send(response)
 				genome.last_requested = pool.generation
-				job.request_count = job.request_count + 1
-
-				-- Set client char if available
-				if clients[clientId] then
-					jobs[jobs.index].client = clients[clientId].char
+				if clients[clientId] and clients[clientId].char then
+					genome.request_char = clients[clientId].char
 				end
+				job.request_count = job.request_count + 1
 			end
 		end
 
 		totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
 	else
-		--print("Error: " .. err)
+		io.stderr:write(print("Error: " .. err))
 	end
 
 	-- done with client, close the object
@@ -1622,27 +1703,35 @@ while true do
 
 	printBoard(percentage)
 
-    -- Is it a new generation?
-    if lastGeneration ~= pool.generation then
-        lastGeneration = pool.generation
-        -- Save a backup of the generation, if it's been long enough (or we won!)
-        if (socket.gettime() - lastSaved) >= SAVE_EVERY_N_MINUTES
-        	or hasAchievedNewMaxFitness then
-            writeFile("backup." .. pool.generation .. "." .. "NEW_GENERATION")
-            lastSaved = socket.gettime()
-            lastCheckpoint = os.date("%c", os.time())
+	-- Is it a new generation?
+	if lastGeneration ~= pool.generation then
+		lastGeneration = pool.generation
+
+        -- Only check stopping condition once generation is over
+        if reachedStoppingCondition() then
+            TIME_TO_STOP = true
         end
-        hasAchievedNewMaxFitness = false
-    end
+
+		-- Save a backup of the generation, if it's been long enough (or we won!)
+		local timeSinceLastBackup = socket.gettime() - lastSaved
+		if timeSinceLastBackup >= SAVE_EVERY_N_MINUTES
+			or hasAchievedNewMaxFitness
+            or TIME_TO_STOP then
+			writeBackup("backup." .. pool.generation .. "." .. "NEW_GENERATION", timeSinceLastBackup)
+			lastSaved = socket.gettime()
+			lastCheckpoint = os.date("%c", os.time())
+		end
+		hasAchievedNewMaxFitness = false
+	end
 
 	local endTime = socket.gettime()
 	local averageTime = getAverage(timeAverages)
 	local frameAverage = getAverage(frameAverages)
-	statscr:mvaddstr(1,1,string.format("   last: %5.3f", endTime - startTime))
-	statscr:mvaddstr(2,1,string.format("average: %5.3f", averageTime))
-	statscr:mvaddstr(3,1,string.format("frames played per second   (avg): %7.0f",
+	statscr:mvaddstr(1,1,string.format("   last: %5.3f  ", endTime - startTime))
+	statscr:mvaddstr(2,1,string.format("average: %5.3f  ", averageTime))
+	statscr:mvaddstr(3,1,string.format("frames played per second   (avg): %7.0f  ",
 		frameAverage / averageTime))
-	statscr:mvaddstr(4,1,string.format("frames played per second (total): %7.0f",
+	statscr:mvaddstr(4,1,string.format("frames played per second (total): %7.0f  ",
 		total_frames_session / (endTime - start_of_session)))
 	statscr:mvaddstr(5,1,string.format("%2d conns | %5.3fs waiting | %5.3fs comm",
 		connectionCount, totalTimeWaiting, totalTimeCommunicating))
@@ -1652,3 +1741,12 @@ while true do
 	end
 	statscr:refresh()
 end
+
+server:close()
+clearAllScreens()
+print(reachedStoppingCondition())
+print("Moving results over to " .. conf.Name)
+io.popen("mv " .. backupDir .. " " .. conf.Name)
+
+-- TODO: Tell the facilitator that this experiment is complete!
+-- Simply a message that says server!Name

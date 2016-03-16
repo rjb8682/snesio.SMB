@@ -1,0 +1,14 @@
+Make a script that returns the name of the latest backup file
+Half stale counters
+
+Automate entire server start process
+-- Creates backup directory structure
+-- Starts demo server on some known port
+-- Demo mode needs a GUI to select ports (easily switch between demos)
+-- Store all hyperparameters inside a server config file (stored inside the backup dir()
+-- lua server.lua resume=name_of_run, where <name_of_run> is a known run to resume
+-- lua server.lua <config filename> creates a new run from the config file, moves that file to the new backup dir, etc
+
+Client genome count needs to be fractional (half level = 0.5)
+
+Enforce LuaJIT usage
