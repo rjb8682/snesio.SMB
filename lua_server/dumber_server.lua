@@ -1528,7 +1528,9 @@ local total_frames_session = 0
 
 local hasAchievedNewMaxFitness = false
 
-while not reachedStoppingCondition() do
+local TIME_TO_STOP = false
+
+while not TIME_TO_STOP do
 	local percentage = calculatePercentage()
 	local startTime = socket.gettime()
 
@@ -1704,10 +1706,17 @@ while not reachedStoppingCondition() do
 	-- Is it a new generation?
 	if lastGeneration ~= pool.generation then
 		lastGeneration = pool.generation
+
+        -- Only check stopping condition once generation is over
+        if reachedStoppingCondition() then
+            TIME_TO_STOP = true
+        end
+
 		-- Save a backup of the generation, if it's been long enough (or we won!)
 		local timeSinceLastBackup = socket.gettime() - lastSaved
 		if timeSinceLastBackup >= SAVE_EVERY_N_MINUTES
-			or hasAchievedNewMaxFitness then
+			or hasAchievedNewMaxFitness
+            or TIME_TO_STOP then
 			writeBackup("backup." .. pool.generation .. "." .. "NEW_GENERATION", timeSinceLastBackup)
 			lastSaved = socket.gettime()
 			lastCheckpoint = os.date("%c", os.time())
@@ -1733,8 +1742,11 @@ while not reachedStoppingCondition() do
 	statscr:refresh()
 end
 
+server:close()
 clearAllScreens()
 print(reachedStoppingCondition())
+print("Moving results over to " .. conf.Name)
+io.popen("mv " .. backupDir .. " " .. conf.Name)
 
 -- TODO: Tell the facilitator that this experiment is complete!
 -- Simply a message that says server!Name
