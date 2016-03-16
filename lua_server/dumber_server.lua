@@ -983,7 +983,6 @@ function createPartitions(set, numGoalPartitions)
 	return parts
 end
 
-
 -- TODO: explode in a good order! (long levels first)
 function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
 	local splitFactor = math.floor(math.min(splitFactor(activeClients, incompleteJobs), NUM_LEVELS))
@@ -1002,6 +1001,8 @@ function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
 
 		-- Split it into 22 jobs
 		for i, split in pairs(splits) do
+			-- Insert in place
+			-- TODO: Explore inserting a subtable composed of the splits, rather than inserting 22 times
 			table.insert(jobs, jobIndex, {species=job.species, genome=job.genome, levelsToPlay=split, request_count=0})
 		end
 	end
@@ -1256,7 +1257,7 @@ function printLevelsDisplay()
 		local y, x = levelscr:getyx()
 
 		if levels[i].a then
-			if last_levels[i].f and last_levels[i].f > 0 then
+			if last_levels[i].a then
 				if last_levels[i].r == "victory" then
 					levelscr:attron(curses.color_pair(1))
 				end
@@ -1265,16 +1266,16 @@ function printLevelsDisplay()
 				end
 				levelscr:mvaddstr(y+1,1,string.format("  %1d-%1d | %13d | %10s |    %10.2f", world,
 																							level,
-																							levels[i].totalFrames,
+																							levels[i].timesWon,
 																							last_levels[i].r,
 																							calculateFitness(last_levels[i], i)))
 
 				levelscr:attroff(curses.color_pair(1))
 				levelscr:attroff(curses.color_pair(2))
 			else
-				levelscr:mvaddstr(y+1,1,string.format("  %1d-%1d | %13s |            |", world,
-																									  level,
-																									  "    "))
+				levelscr:mvaddstr(y+1,1,string.format("  %1d-%1d | %13s |            |                ", world,
+																							level,
+																							levels[i].timesWon))
 			end
 		else
 			--[[
