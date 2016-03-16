@@ -4,7 +4,7 @@ local socket = require("socket")
 config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=false, clientId="demo"}
 print("Using " .. config.server .. ":" .. config.port)
 
-local runName = "300_run" -- default
+local runName = "current" -- default
 
 local shouldSkip = false
 
@@ -615,9 +615,9 @@ while true do
 	emu.frameadvance()
 
 	-- Get the first genome
-	while not response do
+	repeat
 		response = getNewGenome()
-	end
+	until response
 
 	printResult = true
 
