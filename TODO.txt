@@ -1,3 +1,61 @@
+
+===================== URGENT ==================
+Allow selecting which genome to play in demo mode
+
+Fix server freeze when large amount of clients (add socket queue)
+
+Run server with LuaJIT! Supposed to be significantly faster than 5.1:
+CHUNK APART SAVE FILES SO WE CAN LUAJIT (serialize subtables individually?)
+
+Design DB
+
+Normalize x, y velocities (they don't seem to be used until very late in evolution)
+
+Partition levels using greedy sorting algorithm
+
+Kill crashed emulators periodically
+
+README file that the run script opens with big text that says people
+should feel free to log out and use these machines (in ascii!)
+
+===================== COMING UP ==================
+
+Create a "diff" between the last best network and the current best:
+*why* did the new one perform better? Victories, frames, distance, per level basis (22 rows)
+
+Once you're done, tell user how long it took us to train a neural net to perform that well
+
+Idea for stats pipeline:
+Write all statistics from server to standard out
+Open a pipe to another process that takes in statistics and writes them to form usable by nginx
+(e.g. takes stats, converts to JSON, writes files)
+
+Fix all statistics that rely on time average
+
+Explore the effects of how much variable name length affects communication time (specifically in the neural network)
+
+Add fitness function to experiment config
+
+Speed optimizations: stop trashing the lua garbage collector
+
+Profile server, see where we need to focus (also check GC)
+Profile client
+
+Consider faster serialization (Ser ? )
+
+===================== DREAMS.EXE ==================
+
+Crazy Imagine idea: make your own networks?
+
+Strip down BizHawk, run headless?
+
+Save neural networks in the DB -- at least the best ones
+would be great for historical playback + diffing networks
+60kb * 300 = 1.8mb per generation. Not the worst. Could save representative sample (>= average)
+
+Consider keeping clients connected and using socket.select
+
+===================== COMPLETE =====================
 ===========================
 DONE AND UNDONE
 Have each client maintain a UDP mailbox
@@ -17,21 +75,10 @@ The kill script could write a file to send a warning to the clients!
 That way the client doesn't request a new level when it's about to be killed (two-way comunication)
 ===========================
 
-Explore the effects of how much variable name length affects communication time (specifically in the neural network)
-
 ===========================
 DONE (sort of, I'd like legitimate PDFs of the structure)
 Let's graph the neural networks! This would be great to have on the website
 ===========================
-
-Create a "diff" between the last best network and the current best:
-*why* did the new one perform better? Victories, frames, distance, per level basis (22 rows)
-
-Save neural networks in the DB -- at least the best ones
-would be great for historical playback + diffing networks
-60kb * 300 = 1.8mb per generation. Not the worst. Could save representative sample (>= average)
-
-Run server with LuaJIT! Supposed to be significantly faster than 5.1.
 
 ===========================
 IN PROGRESS
@@ -47,37 +94,22 @@ Can use for estimating human-level Mario ability
 Also use as a demo booth for imagine (who's better? your or the computer)
 ===========================
 
-Consider faster serialization
-
 ===========================
 DONE
 Imagine: play as mario does
 ===========================
-
-Extension: once you're done, tell user how long it took us to train a neural net to perform that well
-
-Crazy Imagine idea: make your own networks?
 
 ===========================
 DONE (demo mode)
 Client option to request full genomes rather than genome.network, that we we can watch how the network changes as we evolve from generation zero (great for imagine)
 DEMO OPTION: always send the best genome!!! (new request type) -- watch the network evolving!!
 ===========================
-ADDENDUM: Allow selecting which genome to play
-===========================
-
-Idea for stats pipeline:
-Write all statistics from server to standard out
-Open a pipe to another process that takes in statistics and writes them to form usable by nginx
-(e.g. takes stats, converts to JSON, writes files)
 
 ======================
 DONE
 FIX LEVELS DISPLAY
 (half-results display second half on first half)
 ======================
-
-Fix all statistics that rely on time average
 
 =====================
 DONE
@@ -90,16 +122,14 @@ Decay for simulataneous requests
 Fixes issue where we get stuck if MAX_SIMULTANEOUS_CLIENTS all go down at once
 ====================
 
-Normalize x, y velocities (they don't seem to be used until very late in evolution)
-
-https://github.com/pkulchenko/serpent
-Turn some settings off for speed
-
-Add fitness function to experiment config
-
-Speed optimizations: stop trashing the lua garbage collector
-Fix server freeze when large amount of clients (add socket queue)
-Consider keeping clients connected and using socket.select
-
+=========================
+DONE
 CACHE SERIALIZING NETWORKS!!!!
 Why serialize the same network 22 times?
+=============================
+
+==========================
+DONE
+https://github.com/pkulchenko/serpent
+Turn some settings off for speed
+==========================
