@@ -613,4 +613,6 @@ while true do
 	if timeToDie then
 		client.exit()
 	end
+
+    collectgarbage()
 end

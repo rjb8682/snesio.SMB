@@ -504,6 +504,8 @@ timeToDie = false
 
 start_time = socket.gettime()
 
+local response = nil
+
 -- loop forever waiting for games to play
 while true do
 	emu.frameadvance()
@@ -611,4 +613,6 @@ while true do
 	if timeToDie then
 		client.exit()
 	end
+
+    collectgarbage()
 end
