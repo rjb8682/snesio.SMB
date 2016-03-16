@@ -18,9 +18,13 @@ assert(config, "Could not load config")
 print(serpent.block(config))
 
 print("Creating experiment: " .. config.Name)
-io.popen("mkdir -p current/genomes", "r")
-local file, err = io.open("current/config", "w")
-assert(file, err)
-file:write(serpent.dump(config))
+io.popen("mkdir -p current/genomes/", "r")
+local config = serpent.dump(config)
+
+-- Wait for the file to write
+socket.sleep(1)
+
+local file = io.output("current/config")
+file:write(config)
 file:close()
 print("lua dumber_server.lua current 2> err.txt to start the experiment")
