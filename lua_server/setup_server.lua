@@ -8,23 +8,26 @@ function getServerConfig()
 	response, err = client:receive("*a")
 	client:close()
 	assert(response, err)
-	ok, result = serpent.load(response)
+	ok, result = serpent.load(response, {comment=false})
 	assert(result, ok)
 	return result
 end
 
-config = getServerConfig()
-assert(config, "Could not load config")
-print(serpent.block(config))
+local config = getServerConfig()
+
+print("Asserting...")
+assert(config.Name)
+assert(config.VERSION_CODE)
+assert(config.Population)
+print("Done!")
 
 print("Creating experiment: " .. config.Name)
 io.popen("mkdir -p current/genomes/", "r")
-local config = serpent.dump(config)
 
 -- Wait for the file to write
-socket.sleep(1)
+socket.sleep(3)
 
 local file = io.output("current/config")
-file:write(config)
+file:write(serpent.dump(config))
 file:close()
 print("lua dumber_server.lua current 2> err.txt to start the experiment")

@@ -7,10 +7,9 @@ echo "Checking for an active experiment..."
 while true; do
     if [ -d "current" ]; then
         echo "Active experiment found. Continuing from where we left off!"
-
+        lua dumber_server.lua current 2> err.txt
     else
         echo "No active experiment found. Setting up a new experiment."
-        lua setup_server.lua
         lua setup_server.lua
         if [ -d "current" ]; then
             echo "New experiment found. Running."
@@ -20,4 +19,5 @@ while true; do
             exit
         fi
     fi
+    sleep 1
 done

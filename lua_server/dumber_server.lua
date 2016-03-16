@@ -1746,7 +1746,15 @@ server:close()
 clearAllScreens()
 print(reachedStoppingCondition())
 print("Moving results over to " .. conf.Name)
-io.popen("mv " .. backupDir .. " " .. conf.Name)
+io.popen("mv " .. backupDir .. " " .. conf.Name .. "__" .. os.date("%d_%m_%y_%H_%M_%S", os.time()))
 
 -- TODO: Tell the facilitator that this experiment is complete!
 -- Simply a message that says server!Name
+local client, err
+repeat
+	print("Attempting to connect to facilitator...")
+	socket.sleep(1)
+	client, err = socket.connect("snes.bluefile.org", 56666)
+until client
+client:send("server!" .. conf.Name .. "\n")
+client:close()

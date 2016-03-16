@@ -6,12 +6,9 @@ local ip, port = server:getsockname()
 
 -- TODO: System to determine current active experiment
 -- maybe servers check in with facilitator? idk
-local currentExperiment = "300_run.experiment"
 
 -- TODO: Clients won't kill themselves until they connect... fix this. If the server isn't responding,
 -- they should kill themselves after a few attempts, that way they get repurposed
-
--- TODO: why are the supposedly split levels not split?
 
 function mysplit(inputstr, sep)
 	if sep == nil then
@@ -25,6 +22,21 @@ function mysplit(inputstr, sep)
 	return t
 end
 
+function os.capture(cmd, raw)
+    local f = assert(io.popen(cmd, 'r'))
+    local s = assert(f:read('*a'))
+    f:close()
+    if raw then return s end
+    s = string.gsub(s, '^%s+', '')
+    s = string.gsub(s, '%s+$', '')
+    s = string.gsub(s, '[\n\r+', ' ')
+    return s
+end
+
+function getExperimentsList()
+    return mysplit(os.capture("ls -d experiments/*", true))
+end
+
 function getClientCode(filename)
 	file = io.open("codebase/" .. filename, "r")
 	code = file:read("*all")
@@ -32,16 +44,53 @@ function getClientCode(filename)
 	return code
 end
 
-function getExperiment(experiment_name)
-	file = io.open("experiments/" .. experiment_name, "r")
-	experiment = file:read("*all")
-	file:close()
-	-- Compact-ify (experiment format is pretty-printed)
-	ok, tab = serpent.load(experiment)
-	if ok then
-		return tab
-	end
+function getExperimentAt(path)
+	file = io.open(path, "r")
+    if file then
+        experiment = file:read("*all")
+        file:close()
+
+        -- Compact-ify (experiment format is pretty-printed)
+        ok, tab = serpent.load(experiment)
+        if ok then
+            return tab
+        end
+    end
 	return nil
+end
+
+function getCurrentExperiment()
+    -- TODO: support multiple servers?
+    return getExperimentAt("current_experiments/current.config")
+end
+
+function getExperiment(experiment_name)
+	return getExperimentAt("experiments/" .. experiment_name)
+end
+
+function getNewExperimentPath()
+    local experiments = getExperimentsList()
+    for key, value in pairs(experiments) do
+        return value
+    end
+
+    return nil
+end
+
+function markExperimentComplete(experiment_name)
+    -- TODO: support multiple experiments
+    local experiment = getCurrentExperiment()
+    if experiment then
+        io.popen("mv current_experiments/current.config completed_experiments/"
+            .. experiment.Name .. "__" .. os.date("%d_%m_%y_%H_%M_%S", os.time()))
+    else
+        print("No current experiment to mark complete")
+    end
+
+end
+
+function markExperimentInProgress(experiment_path)
+    io.popen("mv " .. experiment_path .. "  current_experiments/current.config")
 end
 
 while true do
@@ -49,26 +98,32 @@ while true do
 	local client = server:accept()
 	local line, err = client:receive()
 	if line then
-		print("received: " .. line)
-		toks = mysplit(line)
+		toks = mysplit(line, "!")
+		print("received: " .. line .. " -> " .. serpent.line(toks, {comment=false}))
 		if toks[1] == "client" then
 			print("hello, client!")
-			local experiment = getExperiment(currentExperiment)
+			local experiment = getCurrentExperiment()
 			local code_file = experiment.ClientCode
-			-- TODO: change from "client_logic" to based on code_file
 			client:send(getClientCode(code_file))
 		elseif toks[1] == "server" then
 			print("hello, server!")
 			if toks[2] then
-				-- TODO: move corresponding experiment from experiments to completed_experiments
-				-- Update currentExperiment
 				print("Experiment complete: " .. toks[2])
+                markExperimentComplete(toks[2])
 			else
-				local experiment = getExperiment(currentExperiment)
-				local result = serpent.dump(experiment)
-				print("Sending config:")
-				print(result)
-				client:send(result)
+                local newExperimentPath = getNewExperimentPath()
+				local experiment = getExperimentAt(newExperimentPath)
+                if experiment then
+                    print("New experiment path: " .. newExperimentPath)
+                    local result = serpent.dump(experiment)
+                    print("Sending config:")
+                    print(result)
+                    client:send(result)
+                    markExperimentInProgress(newExperimentPath)
+                else
+                    print("No current experiment!")
+                    client:send("nothing")
+                end
 			end
 		end
 
