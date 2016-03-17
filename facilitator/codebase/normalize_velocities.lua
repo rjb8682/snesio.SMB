@@ -2,7 +2,7 @@ local serpent = require("serpent")
 local socket = require("socket")
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 10
+local VERSION_CODE = "NORMALIZE"
 
 function initConfigFile()
 	-- Set default config file state here
@@ -99,6 +99,13 @@ HAMMER_TYPE = 0x0abc0af
 HAMMER_STATUS_START = 0x002A
 HAMMER_STATUS_END = 0x0032
 HAMMER_HITBOXES = 0x04D0
+
+-- Mario's max/min velocities in x and y
+local MAX_X_VEL =  40
+local MIN_X_VEL = -40
+local MAX_Y_VEL =   4
+local MIN_Y_VEL =  -5
+
 ----------------- END INPUTS ----------------------------
 
 ProgressTimeoutConstant = 420	-- 7 seconds
@@ -107,6 +114,11 @@ FreezeTimeoutConstant   = 60	-- 1 second
 MaxNodes = 1000000
 
 wonLevel = false
+
+-- Normalize to [-1, 1]
+function normalize(z, min, max)
+	return (2 * (z - min) / (max - min)) - 1
+end
 
 function mysplit(inputstr, sep)
 	if sep == nil then
@@ -136,8 +148,10 @@ function getPositions()
 
 	marioCurX = memory.readbyte(0x0086)
 	marioCurY = memory.readbyte(0x03B8)
-	marioVX = memory.read_s8(0x0057)
-	marioVY = memory.read_s8(0x009F)
+	marioVX = normalize(memory.read_s8(0x0057), MIN_X_VEL, MAX_X_VEL)
+	marioVY = normalize(memory.read_s8(0x009F), MIN_Y_VEL, MAX_Y_VEL)
+
+	-- TODO: add player vertical fractional velocity (0x0433)
 
 	marioWorld = memory.read_s8(0x075F)
 	marioLevel = memory.read_s8(0x0760)
