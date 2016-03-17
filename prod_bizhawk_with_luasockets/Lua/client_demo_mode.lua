@@ -4,7 +4,7 @@ local socket = require("socket")
 config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=false, clientId="demo"}
 print("Using " .. config.server .. ":" .. config.port)
 
-local runName = "current" -- default
+local runName = "backups_dev" -- default
 
 local shouldSkip = false
 
