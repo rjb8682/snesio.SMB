@@ -8,7 +8,7 @@ function getServerConfig()
 	response, err = client:receive("*a")
 	client:close()
 	assert(response, err)
-	ok, result = serpent.load(response, {comment=false})
+	ok, result = serpent.load(response, {safe=false})
 	assert(result, ok)
 	return result
 end
