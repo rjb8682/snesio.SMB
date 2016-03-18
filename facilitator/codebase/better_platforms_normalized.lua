@@ -2,7 +2,7 @@ local serpent = require("serpent")
 local socket = require("socket")
 
 -- Increment this when breaking changes are made (will cause old clients to be ignored)
-local VERSION_CODE = 10
+local VERSION_CODE = "PLAT_NORMALIZE"
 
 function initConfigFile()
 	-- Set default config file state here
@@ -85,6 +85,7 @@ EnemyTolerance = 8
 BOTTOM_TILE = 84
 BRICK = 82
 COIN = 194
+FLAGPOLE = 37
 
 ENEMY_TYPES = 0x0016
 
@@ -92,6 +93,9 @@ ENEMY_TYPES = 0x0016
 LIFT_START = 0x24
 LIFT_END = 0x2C
 TRAMPOLINE = 0x32
+PIRANHA = 0x0D
+
+COIN_SPRITE = 666
 
 -- (shouldn't be conflicting with real enemy types)
 HAMMER_TYPE = 0x0abc0af
@@ -100,6 +104,13 @@ HAMMER_TYPE = 0x0abc0af
 HAMMER_STATUS_START = 0x002A
 HAMMER_STATUS_END = 0x0032
 HAMMER_HITBOXES = 0x04D0
+
+-- Mario's max/min velocities in x and y
+local MAX_X_VEL =  40
+local MIN_X_VEL = -40
+local MAX_Y_VEL =   4
+local MIN_Y_VEL =  -5
+
 ----------------- END INPUTS ----------------------------
 
 ProgressTimeoutConstant = 420	-- 7 seconds
@@ -108,6 +119,11 @@ FreezeTimeoutConstant   = 60	-- 1 second
 MaxNodes = 1000000
 
 wonLevel = false
+
+-- Normalize to [-1, 1]
+function normalize(z, min, max)
+	return (2 * (z - min) / (max - min)) - 1
+end
 
 function mysplit(inputstr, sep)
 	if sep == nil then
@@ -137,8 +153,10 @@ function getPositions()
 
 	marioCurX = memory.readbyte(0x0086)
 	marioCurY = memory.readbyte(0x03B8)
-	marioVX = memory.read_s8(0x0057)
-	marioVY = memory.read_s8(0x009F)
+	marioVX = normalize(memory.read_s8(0x0057), MIN_X_VEL, MAX_X_VEL)
+	marioVY = normalize(memory.read_s8(0x009F), MIN_Y_VEL, MAX_Y_VEL)
+
+	-- TODO: add player vertical fractional velocity (0x0433)
 
 	marioWorld = memory.read_s8(0x075F)
 	marioLevel = memory.read_s8(0x0760)
@@ -166,7 +184,7 @@ function getTile(dx, dy)
 	
 	tile = memory.readbyte(addr)
 	-- Don't let Mario see coins.
-	if tile ~= 0 and tile ~= COIN then
+	if tile ~= 0 and tile ~= COIN and tile ~= FLAGPOLE then
 		--print(tostring(x) .. ", " .. tostring(y) .. ": " .. tostring(memory.readbyte(addr)))
 		return 1
 	else
@@ -181,10 +199,31 @@ function getSprites()
 		local enemy = memory.readbyte(0xF+slot)
 		local enemyType = memory.readbyte(ENEMY_TYPES + slot)
 		if enemy ~= 0 then
-			local ex = memory.readbyte(0x6E + slot)*0x100 + memory.readbyte(0x87+slot)
+			local ex = memory.readbyte(0x6E + slot)*0x100 + memory.readbyte(0x87+slot) - 8
 			local ey = memory.readbyte(0xCF + slot)+24
 			--print(enemyType .. ": " .. ex .. ", " .. ey)
-			sprites[#sprites+1] = {x=ex,y=ey,t=enemyType}
+
+			if enemyType >= LIFT_START and enemyType <= LIFT_END then
+				if marioWorld < 4 then
+ 					-- Triple-wide platforms
+ 					sprites[#sprites+1] = {x=ex+32,y=ey-12,t=enemyType}
+					sprites[#sprites+1] = {x=ex+0, y=ey-12,t=enemyType}
+					sprites[#sprites+1] = {x=ex+16,y=ey-12,t=enemyType}
+				else
+	 				-- Double-wide platforms
+	 				sprites[#sprites+1] = {x=ex+8,y=ey-12,t=enemyType}
+					sprites[#sprites+1] = {x=ex+16,y=ey-12,t=enemyType}
+					sprites[#sprites+1] = {x=ex-0,y=ey-12,t=enemyType}
+				end
+			elseif enemyType == PIRANHA then
+				-- print("plant")
+				sprites[#sprites+1] = {x=ex-8,y=ey-8,t=PIRANHA}
+				sprites[#sprites+1] = {x=ex+8,y=ey-8,t=PIRANHA}
+				sprites[#sprites+1] = {x=ex-8,y=ey-0,t=PIRANHA}
+				sprites[#sprites+1] = {x=ex+8,y=ey-0,t=PIRANHA}
+			else
+				sprites[#sprites+1] = {x=ex,y=ey,t=enemyType}
+			end
 		end
 	end
 	--print("------hammers-------")
@@ -207,38 +246,45 @@ function getSprites()
 	return sprites
 end
 
+local TWIDTH = 16
+local YStart = -(BoxRadiusY-ShiftY)*TWIDTH
+local YEnd =    (BoxRadiusY+ShiftY)*TWIDTH
+local XStart = -(BoxRadiusX-ShiftX)*TWIDTH
+local XEnd =    (BoxRadiusX+ShiftX)*TWIDTH
+
 function getInputs()
 	getPositions()
-	sprites = getSprites()
+	local sprites = getSprites()
 	local inputs = {}
-
-	YStart = -(BoxRadiusY-ShiftY)*16
-	YEnd =    (BoxRadiusY+ShiftY)*16
-	XStart = -(BoxRadiusX-ShiftX)*16
-	XEnd =    (BoxRadiusX+ShiftX)*16
 	
-	for dy=YStart,YEnd,16 do
-		for dx=XStart,XEnd,16 do
+	for dy=YStart,YEnd,TWIDTH do
+		for dx=XStart,XEnd,TWIDTH do
 			inputs[#inputs+1] = 0
 			
 			--print("dx: " .. dx .. " dy: " .. dy)
 			for i = 1,#sprites do
 				-- Lifts are sprites, but not enemies. Make them a 1.
 				-- TODO: Trampolines??
-				if sprites[i].t == HAMMER_TYPE then
+				local sprite = sprites[i]
+				if sprite.t == HAMMER_TYPE then
 					-- Hammers are relative on the screen, but use an axis starting at 0
-					distx = math.abs(sprites[i].x - screenX - (dx-8)) -- was 8
-					disty = math.abs(sprites[i].y - screenY - (dy-8)) -- was 8
+					distx = math.abs(sprite.x - screenX - (dx-8)) -- was 8
+					disty = math.abs(sprite.y - screenY - (dy-8)) -- was 8
 					--print("H -> x: " .. sprites[i].x .. " y: " .. sprites[i].y .. " distx: " .. distx .. " disty: " .. disty)
 				else
 					-- Otherwise, calculate relative to start of level
-					distx = math.abs(sprites[i].x - (marioX+dx-8))
-					disty = math.abs(sprites[i].y - (marioY+dy-8))
+					distx = math.abs(sprite.x - (marioX+dx-7.5))
+					disty = math.abs(sprite.y - (marioY+dy-7.5))
 					--print("* -> distx: " .. distx .. " disty: " .. disty)
 				end
+				-- if cartesian(distx, disty) <= EnemyTolerance then
+				-- if manhattan(distx, disty) <= EnemyTolerance then
 				if distx <= EnemyTolerance and disty <= EnemyTolerance then
-					if sprites[i].t >= LIFT_START and sprites[i].t < LIFT_END then
+					if sprite.t >= LIFT_START and sprite.t <= LIFT_END
+						or sprite.t == TRAMPOLINE then
 						inputs[#inputs] = 1
+					elseif sprite.t == COIN_SPRITE then
+						inputs[#inputs] = 0
 					else
 						inputs[#inputs] = -1
 					end
@@ -507,7 +553,6 @@ function checkForServerOrderedDeath(resp, clientObj)
 	end
 end
 
--- Global so that we can re-use the network string when possible
 -- Global so that we can re-use the network string when possible
 networkStr = nil
 
