@@ -1557,6 +1557,7 @@ while not TIME_TO_STOP do
 	local line, err = client:receive()
 
 	local stop_sending_levels = false
+	local versionCode = nil
 
 	-- Was it good?
 	if not err then
@@ -1569,7 +1570,7 @@ while not TIME_TO_STOP do
 			local r_species = tonumber(toks[3])
 			local r_genome = tonumber(toks[4])
 			local iterationId = tonumber(toks[5])
-			local versionCode = toks[6]
+			versionCode = toks[6]
 			local ok, r_levels = serpent.load(toks[7])
 			stop_sending_levels = toks[8]
 
@@ -1671,8 +1672,11 @@ while not TIME_TO_STOP do
 			end
 		end
 
-		-- Send the next network to play
-		if stop_sending_levels ~= "true" then
+		-- If this client is running bad code, stop him in his tracks.
+		if versionCode and versionCode ~= VERSION_CODE then
+			client:send("die\n")
+		-- Otherwise, send the next network to play
+		elseif stop_sending_levels ~= "true" then
 			-- Find the first open, non-requested spot.
 			-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
 			findNextNonRequestedGenome()

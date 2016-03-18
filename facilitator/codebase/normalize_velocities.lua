@@ -57,6 +57,7 @@ loadConfigFile()
 
 print("Client: " .. config.clientId)
 print("Server: " .. config.server .. ":" .. config.port)
+print("Version code: " .. VERSION_CODE)
 
 ----------------- INPUTS ----------------------------
 Filename = "1.State"
@@ -510,6 +511,16 @@ if config.demoFile and config.demoFile ~= "" then
 end
 -------------------- END DEMO CODE ONLY -------------------------------------
 
+function checkForServerOrderedDeath(resp, clientObj)
+	-- Kill ourselves if the server says so
+	if resp and resp == "die" then
+		if clientObj then
+			clientObj:close()
+		end
+		client.exit()
+	end
+end
+
 -- Global so that we can re-use the network string when possible
 networkStr = nil
 
@@ -538,6 +549,7 @@ while true do
 		if not err then
 			bytes, err = client:send(config.clientId .. "\n")
 			response, err2 = client:receive()
+			checkForServerOrderedDeath(response, client)
 		end
 		-- Close the client and play
 		if client then
@@ -602,8 +614,9 @@ while true do
 				if not timeToDie then
 					-- The server might send the next level right away
 					maybeResponse, err3 = client2:receive()
-					-- TODO: delte this and make the client loop simpler. The server never sends no level any more
-					if not err3 and response ~= "no_level" then
+					checkForServerOrderedDeath(maybeResponse, client2)
+
+					if not err3 and maybeResponse ~= "no_level" then
 						if config.debug then print("received next level from two-way connection") end
 						nextResponseToUse = maybeResponse
 					end
