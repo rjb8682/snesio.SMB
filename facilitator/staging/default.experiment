@@ -6,7 +6,7 @@
     "Left",
     "Right"
   },
-  ClientCode = "default_client_logic.lua",
+  ClientCode = "client_logic_300_run.lua",
   CrossoverChance = 0.75,
   DeltaDisjoint = 2,
   DeltaThreshold = 1,
@@ -27,9 +27,10 @@
   Port = 56506,
   StaleSpecies = 15,
   StepSize = 0.10000000000000001,
-  StopFitness = -1,
-  StopGeneration = -1,
-  StopTimeSeconds = -1,
+  StopFitness = 20000,
+  StopGeneration = 10,
+  StopTimeSeconds = 120,
+  StopFrames = -1,
   VERSION_CODE = 10,
   WorldAugmenter = 0.20000000000000001
 }

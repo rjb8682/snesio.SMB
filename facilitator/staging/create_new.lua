@@ -29,12 +29,13 @@ end
 
 
 local default_experiment = {
-	VERSION_CODE = math.floor(math.random() * 1000000000), -- Don't even THINK about fucking with this
+	VERSION_CODE = tostring(math.floor(math.random() * 1000000000)), -- Don't even THINK about fucking with this
 	Name = "default_experiment",
 	ClientCode = "default_client_logic.lua", -- Client code *must* contain VERSION_CODE,
 	StopGeneration = -1,
 	StopTimeSeconds = -1,
 	StopFitness = -1,
+	StopFrames = -1,
 	Port = 56506,
 
 	ButtonNames = button_names,

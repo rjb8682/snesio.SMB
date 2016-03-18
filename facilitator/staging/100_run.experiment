@@ -19,7 +19,7 @@
   LinkMutationChance = 2,
   MaxNodes = 1000000,
   MutateConnectionsChance = 0.25,
-  Name = "300_run",
+  Name = "100_run",
   NodeMutationChance = 0.5,
   Outputs = 3,
   PerturbChance = 0.90000000000000002,
@@ -28,8 +28,9 @@
   StaleSpecies = 15,
   StepSize = 0.10000000000000001,
   StopFitness = -1,
-  StopGeneration = -1,
+  StopGeneration = 5,
   StopTimeSeconds = -1,
-  VERSION_CODE = 9,
+  StopFrames = -1,
+  VERSION_CODE = 10,
   WorldAugmenter = 0.20000000000000001
 }

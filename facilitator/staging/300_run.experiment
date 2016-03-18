@@ -23,13 +23,14 @@
   NodeMutationChance = 0.5,
   Outputs = 3,
   PerturbChance = 0.90000000000000002,
-  Population = 50,
+  Population = 300,
   Port = 56506,
   StaleSpecies = 15,
   StepSize = 0.10000000000000001,
-  StopFitness = -1,
-  StopGeneration = 3,
-  StopTimeSeconds = -1,
+  StopFitness = 20000,
+  StopGeneration = 5,
+  StopTimeSeconds = 60,
+  StopFrames = -1,
   VERSION_CODE = 10,
   WorldAugmenter = 0.20000000000000001
 }
