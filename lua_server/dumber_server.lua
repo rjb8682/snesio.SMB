@@ -35,7 +35,7 @@ function loadConfigFile(filename)
 	result, err = file:read("*all")
 	file:close()
 	assert(result, err)
-	ok, tab = serpent.load(result)
+	ok, tab = serpent.load(result, {safe=false})
 	assert(tab, ok)
 	return tab
 end
@@ -43,13 +43,14 @@ end
 local conf = assert(loadConfigFile(configFileName), "Couldn't load config file")
 
 -------- Read and validate server config -------
-local VERSION_CODE 	= assert(conf.VERSION_CODE)
+local VERSION_CODE 	= tostring(assert(conf.VERSION_CODE)) -- Interpret as string
 local Name 			= assert(conf.Name)
 local Port 			= assert(conf.Port)
 
 local StopGeneration 	= assert(conf.StopGeneration)
 local StopTimeSeconds 	= assert(conf.StopTimeSeconds)
 local StopFitness 		= assert(conf.StopFitness)
+local StopFrames 		= assert(conf.StopFrames)
 
 local BoxRadius	= assert(conf.BoxRadius)
 local InputSize	= assert(conf.InputSize)
@@ -1058,7 +1059,7 @@ function saveConfig()
 	file:close()
 end
 
-function writeBackup(filename, secondsAdded)
+function writeBackup(filename, secondsAdded, framesAdded)
 	local backupPath = backupDir .. filename
 	local file = io.open(backupPath, "w")
 	file:write(dumpTable(pool))
@@ -1077,6 +1078,11 @@ function writeBackup(filename, secondsAdded)
 		conf.TimeSpentTraining = 0
 	end
 	conf.TimeSpentTraining = conf.TimeSpentTraining + secondsAdded
+
+	if not conf.FramesSpentTraining then
+		conf.FramesSpentTraining = 0
+	end
+	conf.FramesSpentTraining = conf.FramesSpentTraining + framesAdded
 
 	saveConfig()
 end
@@ -1103,9 +1109,9 @@ clearLevels()
 
 function printBanner(percentage)
 	-- Print previous results
-	bannerscr:mvaddstr(1,1,string.format("              %s", Name))
-	bannerscr:mvaddstr(2,1,string.format("   StopGen: %d StopFitness: %d StopTime: %d", StopGeneration, StopFitness, StopTimeSeconds))
-	bannerscr:mvaddstr(3,1,string.format("     gen %4d species %3d genome %3d (%5.1f%%)",   last_generation,
+	bannerscr:mvaddstr(1,1,string.format(" %s", Name))
+	bannerscr:mvaddstr(2,1,string.format(" [Stop] Gen: %d Fitness: %d Time: %d Frames: %d", StopGeneration, StopFitness, StopTimeSeconds, StopFrames))
+	bannerscr:mvaddstr(3,1,string.format("     G/s/g: %4d/%3d/%3d (%5.1f%%)",   last_generation,
 																					last_species,
 																					last_genome,
 																					percentage))
@@ -1482,8 +1488,12 @@ function reachedStoppingCondition()
 		return "Max generation of " .. StopGeneration .. " reached!"
 	elseif StopFitness > 0 and pool.maxFitness >= StopFitness then
 		return "Stopping fitness of " .. StopFitness .. " reached!"
-	elseif StopTimeSeconds > 0 and conf.TimeSpentTraining >= StopTimeSeconds then
+	elseif StopTimeSeconds > 0 and conf.TimeSpentTraining
+				and conf.TimeSpentTraining >= StopTimeSeconds then
 		return "Stopping time of " .. StopTimeSeconds .. " reached!"
+	elseif StopFrames > 0 and conf.FramesSpentTraining
+				and conf.FramesSpentTraining >= StopFrames then
+		return "Stopping frames of " .. StopFrames .. " reached!"
 	end
 
 	return false
@@ -1506,6 +1516,9 @@ lastGeneration = pool.generation
 
 -- How long since we saved a generation
 lastSaved = socket.gettime()
+
+-- How many frames of results we've obtained since backing up
+local framesSinceLastBackup = 0
 
 pool.currentSpecies = 1
 pool.currentGenome = 1
@@ -1556,7 +1569,7 @@ while not TIME_TO_STOP do
 			local r_species = tonumber(toks[3])
 			local r_genome = tonumber(toks[4])
 			local iterationId = tonumber(toks[5])
-			local versionCode = tonumber(toks[6])
+			local versionCode = toks[6]
 			local ok, r_levels = serpent.load(toks[7])
 			stop_sending_levels = toks[8]
 
@@ -1609,6 +1622,12 @@ while not TIME_TO_STOP do
 				playedGenome.fitness = playedGenome.fitness + fitnessResult
 				playedGenome.completeness = playedGenome.completeness + validResultSet
 
+				-- Total up frame counts
+				local totalFrames = sumFrames(r_levels, validResultSet)
+				addAverage(frameAverages, totalFrames)
+				total_frames_session = total_frames_session + totalFrames
+				framesSinceLastBackup = framesSinceLastBackup + totalFrames
+
 				-- Are we finished?
 				if Set.size(playedGenome.completeness) == NUM_LEVELS then
 					-- Release the memory for the serialized network
@@ -1619,16 +1638,16 @@ while not TIME_TO_STOP do
 
 					if playedGenome.fitness > pool.maxFitness then
 						--io.stderr:write("New max fitness achieved: " .. playedGenome.fitness .. "\n")
-						writeGenome(tostring(playedGenome.fitness) .. ".genome", playedGenome)
+						local framesTrained = conf.FramesSpentTraining
+						if not framesTrained then
+							framesTrained = framesSinceLastBackup
+						end
+						writeGenome(tostring(playedGenome.fitness) .. "_" .. framesTrained .. ".genome", playedGenome)
 						pool.maxFitness = playedGenome.fitness
 						-- Make sure we save this generation once it's over
 						hasAchievedNewMaxFitness = true
 					end
 				end
-
-				local totalFrames = sumFrames(r_levels, validResultSet)
-				addAverage(frameAverages, totalFrames)
-				total_frames_session = total_frames_session + totalFrames
 
 				-- Since we got a valid result, update the times.
 				addAverage(timeAverages, socket.gettime() - startTime)
@@ -1717,7 +1736,7 @@ while not TIME_TO_STOP do
 		if timeSinceLastBackup >= SAVE_EVERY_N_MINUTES
 			or hasAchievedNewMaxFitness
             or TIME_TO_STOP then
-			writeBackup("backup." .. pool.generation .. "." .. "NEW_GENERATION", timeSinceLastBackup)
+			writeBackup("backup." .. pool.generation .. "." .. "NEW_GENERATION", timeSinceLastBackup, framesSinceLastBackup)
 			lastSaved = socket.gettime()
 			lastCheckpoint = os.date("%c", os.time())
 		end
