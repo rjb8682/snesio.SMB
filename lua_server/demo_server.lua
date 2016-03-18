@@ -64,17 +64,36 @@ function scandir(directory)
     return t
 end
 
--- Returns all backup dirs
+function os.capture(cmd, raw)
+    local f = assert(io.popen(cmd, 'r'))
+    local s = assert(f:read('*a'))
+    f:close()
+    if raw then return s end
+    s = string.gsub(s, '^%s+', '')
+    s = string.gsub(s, '%s+$', '')
+    s = string.gsub(s, '[\n\r+', ' ')
+    return s
+end
+
 function getDirs()
-    local dirs = scandir(".")--{[1]="300_run",[2]="backups_dev"}
+    return serpent.dump(mysplit(os.capture("ls -d */", true)))
+end
+
+-- Returns all backup dirs
+function getDirsOld()
+    local dirs = scandir(".")
     local currentDirIndex = nil
     local i = 1
-    for key, value in pairs(dirs) do
-    	if value == ".:" then
-    		currentDirIndex = i
-    	end
-    	dirs[key] = mysplit(value)[1]
-    	i = i + 1
+    for l, line in pairs(dirs) do
+        toks = mysplit(line)
+        for key, value in pairs(toks) do
+            print(value)
+            if value == ".:" then
+                currentDirIndex = i
+            end
+            dirs[key] = value
+            i = i + 1
+        end
     end
 
     -- Remove current dir

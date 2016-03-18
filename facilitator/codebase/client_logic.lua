@@ -1,14 +1,62 @@
 local serpent = require("serpent")
 local socket = require("socket")
 
-config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=false, clientId="demo"}
-print("Using " .. config.server .. ":" .. config.port)
+-- Increment this when breaking changes are made (will cause old clients to be ignored)
+local VERSION_CODE = 9
 
-local runName = "backups_dev" -- default
+function initConfigFile()
+	-- Set default config file state here
+	config = {
+		clientId = "default_name",
+		server = "snes.bluefile.org",
+		port = 56506,
+		demoFile = "",
+		drawGui = false,
+		debug = false,
+		killEvery = 900
+	}
+	local file = io.open("config.txt", "w")
+	file:write(serpent.dump(config))
+	file:close()
+end
+function loadConfigFile()
+	local file = io.open("config.txt", "r")
+	if not file then
+		print("couldn't open config file, creating default")
+		initConfigFile()
+	else
+		ok, config = serpent.load(file:read("*line"))
+		file:close()
+		if not ok then
+			print("bad config file, creating default")
+			initConfigFile()
+		end
+	end
 
-local shouldSkip = false
+	-- Set defaults if missing
+	if not config.clientId then
+		config.clientId = "default_name"
+	end
+	if not config.server then
+		config.server = "snes.bluefile.org"
+	end
+	if not config.killEvery then
+		config.killEvery = 900
+	end
 
-client.speedmode(100)
+	-- If clientId set to "hostname", do a DNS lookup
+	if config.clientId == "hostname" then
+		local hostname = socket.dns.gethostname()
+		if hostname then
+			-- Limit to 12 chars
+			config.clientId = string.sub(socket.dns.gethostname(), 1, 12)
+		end
+	end
+end
+loadConfigFile()
+
+print("Client: " .. config.clientId)
+print("Server: " .. config.server .. ":" .. config.port)
 
 ----------------- INPUTS ----------------------------
 Filename = "1.State"
@@ -60,10 +108,16 @@ MaxNodes = 1000000
 
 wonLevel = false
 
-function dprint(s)
-	if forms.ischecked(debug) then
-		console.writeline(s)
+function mysplit(inputstr, sep)
+	if sep == nil then
+		sep = "%s"
 	end
+	local t={}; i=1
+	for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+		t[i] = str
+		i = i + 1
+	end
+	return t
 end
 
 function getPositions()
@@ -272,8 +326,7 @@ function evaluateCurrent(network)
 	joypad.set(controller)
 end
 
-function playGame(stateIndex, genome)
-	local network = genome.network 
+function playGame(stateIndex, network)
 	savestate.load(stateIndex .. ".State")
 
 	-- Reset state
@@ -287,10 +340,6 @@ function playGame(stateIndex, genome)
 
 	-- Play until we die / win
 	while true do
-		if shouldSkip then
-			shouldSkip = false
-			return 0, 0, 0, "skip", 0
-		end
 		-- Decide which inputs to set
 		if currentFrame%4 == 0 then
 			evaluateCurrent(network)
@@ -309,51 +358,52 @@ function playGame(stateIndex, genome)
 
 		local fitness = rightmost - (currentFrame / 4)
 
-		if forms.ischecked(showBanner) then
-			gui.drawBox(0, 7, 300, 36, 0xD0FFFFFF, 0xD0FFFFFF)
+		if config.drawGui == true then
+			gui.drawBox(0, 7, 300, 40, 0xD0FFFFFF, 0xD0FFFFFF)
+			gui.drawText(0, 10, "Generation: " .. generation
+								.. "." .. currentSpecies
+								.. "." .. currentGenome
+								.. " Fitness: " .. math.floor(fitness), 0xFF000000, 11)
 			local world, level = getWorldAndLevel(stateIndex)
-			local multi = 1.0 + (WorldAugmenter*world) + (LevelAugmenter*level)
-			gui.drawText(0, 8, "Level: " .. world .. "-" .. level .. " (" .. stateIndex .. ")", 0xFF000000, 11)
-			gui.drawText(120, 8, " fitness: " .. math.floor(multi * fitness + maxFitness), 0xFF000000, 11)
-			gui.drawText(83, 20, "total fitness: " .. math.floor(genome.fitness), 0xFF000000, 11)
+			gui.drawText(0, 22, "Level: " .. world .. "-" .. level .. " (" .. stateIndex .. ")", 0xFF000000, 11)
+			gui.drawText(120, 22, "Total Max: " .. maxFitness, 0xFF000000, 11)
 		end
 
 		-- Check for death
 		if playerState == 6 or playerState == 0x0B or verticalScreenPosition > 1 then
 			local reason = "enemyDeath"
 			if verticalScreenPosition > 1 then reason = "fell" end
-			dprint(reason)
+			if config.debug then console.writeline(reason) end
 			return rightmost, currentFrame, 0, reason, stateIndex
 		end
 
 		-- Did we win? (set in getPositions)
 		if wonLevel then
 			wonLevel = false
-			dprint("victory")
+			if config.debug then console.writeline("victory") end
 			return rightmost, currentFrame, 1, "victory", stateIndex
 		end
 
 		-- Check for freeze timeout
 		freezeTimeout = freezeTimeout - 1
 		if freezeTimeout <= 0 or fitness < -100 then
-			dprint("freeze")
+			if config.debug then console.writeline("freeze") end
 			return rightmost, currentFrame, 0, "freeze", stateIndex
 		end
 
 		-- Check for progress timeout
 		progressTimeout = progressTimeout - 1
 		if progressTimeout <= 0 or fitness < -100 then
-			dprint("noProgress")
+			if config.debug then console.writeline("noProgress") end
 			return rightmost, currentFrame, 0, "noProgress", stateIndex
 		end
 		
 		-- Advance frame since we didn't win / die
 		currentFrame = currentFrame + 1
-		collectgarbage()
 		emu.frameadvance()
 
-		if forms.ischecked(showNetwork) then
-			displayGenome(genome)
+		if config.drawGui then
+			displayGenome(network)
 		end
 	end
 end
@@ -365,8 +415,7 @@ function loadNetwork(filename)
 	return network
 end
 
-function displayGenome(genome)
-	local network = genome.network
+function displayGenome(network)
 	local cells = {}
 	local i = 1
 	local cell = {}
@@ -379,96 +428,6 @@ function displayGenome(genome)
 			cells[i] = cell
 			i = i + 1
 		end
-	end
-	local dxCell = {}
-	dxCell.x = 80
-	dxCell.y = 110
-	dxCell.value = network.neurons[Inputs-2].value
-	cells[Inputs-2] = dxCell
-
-	local dyCell = {}
-	dyCell.x = 80
-	dyCell.y = 120
-	dyCell.value = network.neurons[Inputs-1].value
-	cells[Inputs-1] = dyCell
-
-	local biasCell = {}
-	biasCell.x = 80
-	biasCell.y = 130
-	biasCell.value = network.neurons[Inputs].value
-	cells[Inputs] = biasCell
-	local badCount = 0
-	local notBadCount = 0
-
-	for n,neuron in pairs(network.neurons) do
-		cell = {}
-		if n > Inputs and n <= MaxNodes then
-			cell.x = 140
-			cell.y = 100
-			cell.value = neuron.value
-			cells[n] = cell
-		end
-	end
-
-	for n=1,4 do
-		for _,gene in pairs(genome.genes) do
-			if gene.enabled then
-				local c1 = cells[gene.into]
-				local c2 = cells[gene.out]
-				if c1 and c2 then
-					notBadCount = notBadCount + 1
-					if gene.into > Inputs and gene.into <= MaxNodes then
-						c1.x = 0.75*c1.x + 0.25*c2.x + 60
-						if c1.x >= c2.x then
-							c1.x = c1.x - 70
-						end
-
-						if c1.x < 90 then
-							c1.x = 90
-						end
-						if c1.x > 210 then
-							c1.x = 210
-						end
-						c1.y = 0.75*c1.y + 0.25*c2.y - 2
-						
-					end
-					if gene.out > Inputs and gene.out <= MaxNodes then
-						c2.x = 0.25*c1.x + 0.75*c2.x + 20
-						if c1.x >= c2.x then
-							c2.x = c2.x + 100
-						end
-
-						if c2.x < 90 then
-							c2.x = 90
-						end
-						if c2.x > 210 then
-							c2.x = 210
-						end
-						c2.y = 0.25*c1.y + 0.75*c2.y - 2
-					end
-				else
-					badCount = badCount + 1
-				end
-			end
-		end
-	end
-
-	--print("bad count: " .. badCount)
-	--print("nbad count: " .. notBadCount)
-
-	for o = 1,Outputs do
-		cell = {}
-		cell.x = 220
-		cell.y = 46 + 8 * o
-		cell.value = network.neurons[MaxNodes + o].value
-		cells[MaxNodes+o] = cell
-		local color
-		if cell.value > 0 then
-			color = 0xFF0000FF
-		else
-			color = 0xFF000000
-		end
-		gui.drawText(223, 40+8*o, ButtonNames[o], color, 9)
 	end
 	
 	gui.drawBox(50-BoxRadiusX*5-3,70-BoxRadiusY*5-3,50+BoxRadiusX*5+2,70+BoxRadiusY*5+2,0xFF000000, 0x80808080)
@@ -483,27 +442,6 @@ function displayGenome(genome)
 			end
 			color = opacity + color*0x10000 + color*0x100 + color
 			gui.drawBox(cell.x-2,cell.y-2,cell.x+2,cell.y+2,opacity,color)
-		end
-	end
-
-	for _,gene in pairs(genome.genes) do
-		if gene.enabled then
-			local c1 = cells[gene.into]
-			local c2 = cells[gene.out]
-			local opacity = 0xA0000000
-			if c1 and c2 then
-				if c1.value == 0 then
-					opacity = 0x20000000
-				end
-				
-				local color = 0x80-math.floor(math.abs(sigmoid(gene.weight))*0x80)
-				if gene.weight > 0 then 
-					color = opacity + 0x8000 + 0x10000*color
-				else
-					color = opacity + 0x800000 + 0x100*color
-				end
-				gui.drawLine(c1.x+1, c1.y, c2.x-3, c2.y, color)
-			end
 		end
 	end
 	
@@ -534,114 +472,147 @@ function calculateDemoFitness(distance, frames, wonLevel, reason, stateIndex)
 	return 100 + (multi * result) - timePenalty
 end
 
--- Consider sending an ID of the one we have (or keep track of clientIDs on server)
-function getNewGenome()
-	-- Connect to server
-	local client, err = socket.connect(config.server, config.port)
-	if not err then
-		bytes, err = client:send(config.clientId .. "!" .. runName .. "\n")
-		response, err2 = client:receive()
+-- Play demo mode if set (see top of file)
+if config.demoFile and config.demoFile ~= "" then
+	percentage = "666" -- I hate globals...
+	currentGenome = config.demoFile
+	currentSpecies = config.demoFile
+	generation = config.demoFile
+	maxFitness = 0
+	z = 1
+	while true do
+		-- Avoid castles and water levels
+		if z % 4 ~= 0 and z ~= 6 and z ~= 26 then
+			maxFitness = maxFitness + calculateDemoFitness(playGame(z, loadNetwork(config.demoFile)))
+		end
+
+		z = z + 1
+		if z == 33 then
+			print("Total max fitness: " .. maxFitness)
+			maxFitness = 0
+			z = 1
+		end
 	end
-
-	-- Close the client
-	if client then
-		client:close()
-	end
-
-	if response and response ~= "nothing" then
-		return response
-	else
-		print("response: " .. tostring(response))
-	end
-	return nil
 end
+-------------------- END DEMO CODE ONLY -------------------------------------
 
-function skipLevel()
-	shouldSkip = true
-end
+-- Global so that we can re-use the network string when possible
+networkStr = nil
 
-function loadRun()
-	runName = forms.gettext(runsDropDown)
-	skipLevel()
-end
+-- Controls when to stop training
+timeToDie = false
 
-function getRunsList()
-	local client, err = socket.connect(config.server, config.port)
-	if not err then
-		bytes, err = client:send("list\n")
-		response, err2 = client:receive()
-	end
-
-	-- Close the client
-	if client then
-		client:close()
-	end
-
-	ok, runs = serpent.load(response)
-	return runs
-end
-
-local width = 500
-local height = 500
-local lineHeight = 30
-form = forms.newform(width, height, "Demo")
-showBanner = forms.checkbox(form, "Banner", 10, 10)
-showNetwork = forms.checkbox(form, "Network", 10, 50)
-skipButton = forms.button(form, "Skip level", skipLevel, 10, 100, 100, 40)
-
-runsDropDown = forms.dropdown(form, getRunsList(), 10, 150, 350, 40)
-
--- y, x, width, height
-loadRunButton = forms.button(form, "Go!", loadRun, 370, 150, 100, 40)
-debug = forms.checkbox(form, "Debug", 300, 50)
-alwaysShowLatest = forms.checkbox(form, "Always show latest", 10, 350)
-
-forms.setproperty(showBanner, "Checked", true)
-forms.setproperty(showNetwork, "Checked", true)
-forms.setproperty(alwaysShowLatest, "Checked", true)
-
--- TODO: dropdown for all possible runs
-
--- Hook into event loop so that the form gets destroyed
-function onExit()
-	forms.destroy(form)
-end
-
-event.onexit(onExit)
+start_time = socket.gettime()
 
 local response = nil
+
 -- loop forever waiting for games to play
 while true do
 	emu.frameadvance()
 
-	-- Get the first genome
-	repeat
-		response = getNewGenome()
-	until response
+	local toks, iterationId, ok
 
-	printResult = true
-
-	maxFitness = 0
-	for z = 1, 32 do
-		-- Avoid castles and water levels
-		if z % 4 ~= 0 and z ~= 6 and z ~= 26 then
-			ok, genome = serpent.load(response)
-			maxFitness = maxFitness + calculateDemoFitness(playGame(z, genome))
+	-- If the server responded with the next genome from the previous iteration,
+	-- then use that rather than asking for another genome.
+	if nextResponseToUse then
+		if config.debug then print("using next genome from two-way connection") end
+		response = nextResponseToUse
+		nextResponseToUse = nil
+	else
+		-- Connect to server
+		local client, err = socket.connect(config.server, config.port)
+		if not err then
+			bytes, err = client:send(config.clientId .. "\n")
+			response, err2 = client:receive()
 		end
+		-- Close the client and play
+		if client then
+			client:close()
+		end
+	end
 
-		-- Check for a new genome
-		local newGenome = getNewGenome()
-		if newGenome and response ~= newGenome then
-			print("Got a new network")
-			if forms.ischecked(alwaysShowLatest) then
-				response = newGenome
-				printResult = false
-				break
+	if response then
+		toks = mysplit(response, "!")
+		response = nil -- Delete response so we don't re-play the level
+
+		-- Is the server too busy for us?
+		if toks[1] == "wait" then
+			timeout = tonumber(toks[2])
+			console.writeline(socket.gettime() .. " sleeping for " .. timeout)
+			socket.sleep(timeout)
+		else
+			-- Otherwise, play a level!
+			ok, levels = serpent.load(toks[1])
+			iterationId = toks[2]
+			generation = toks[3]
+			currentSpecies = toks[4]
+			currentGenome = toks[5]
+			maxFitness = toks[6]
+			percentage = toks[7]
+			networkStr = toks[8]
+
+			-- Play all requested levels
+			for stateId, level in pairs(levels) do
+				if level.a then
+					-- Ensure the network is fresh by re-loading it from the string
+					-- TODO: explore ways to reset it robustly?
+					local ok, network = serpent.load(networkStr)
+					local dist, frames, wonLevel, reason = playGame(stateId, network)
+					if config.debug then print("level: " .. stateId .. " distance: " .. dist .. " frames: " .. frames .. " reason: " .. reason) end
+					level.d = dist
+					level.f = frames
+					level.w = wonLevel
+					level.r = reason
+				end
+			end
+
+			-- Done playing. Determine if we should kill the emulator.
+			timeToDie = socket.gettime() - start_time > config.killEvery
+
+			-- Send it back yo
+			-- TODO just put it all in levels table
+			local results_to_send = config.clientId .. "!"
+					.. generation .. "!"
+					.. currentSpecies .. "!"
+					.. currentGenome .. "!"
+					.. iterationId .. "!" 
+					.. VERSION_CODE .. "!"
+				    .. serpent.dump(levels) .. "!"
+				    .. tostring(timeToDie) .. "\n"
+
+			local client2, err2 = socket.connect(config.server, config.port)
+			if not err2 then
+				client2:send(results_to_send)
+
+				-- Only try to receive results if we're not going to kill ourselves
+				if not timeToDie then
+					-- The server might send the next level right away
+					maybeResponse, err3 = client2:receive()
+					-- TODO: delte this and make the client loop simpler. The server never sends no level any more
+					if not err3 and response ~= "no_level" then
+						if config.debug then print("received next level from two-way connection") end
+						nextResponseToUse = maybeResponse
+					end
+				end
+			end
+			if client2 then
+				client2:close()
 			end
 		end
+	else
+		print("No response.")
+		if err then
+			print("err: " .. err)
+		end
+		if err2 then
+			print("err2: " .. err2)
+		end
+	end
 
+	-- Time do die?
+	if timeToDie then
+		client.exit()
 	end
-	if printResult then
-		print("Total max fitness: " .. maxFitness)
-	end
+
+    collectgarbage()
 end
