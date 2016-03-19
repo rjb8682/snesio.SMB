@@ -36,6 +36,7 @@ EnemyTolerance = 8
 BOTTOM_TILE = 84
 BRICK = 82
 COIN = 194
+FLAGPOLE = 37
 
 ENEMY_TYPES = 0x0016
 
@@ -43,6 +44,9 @@ ENEMY_TYPES = 0x0016
 LIFT_START = 0x24
 LIFT_END = 0x2C
 TRAMPOLINE = 0x32
+PIRANHA = 0x0D
+
+COIN_SPRITE = 666
 
 -- (shouldn't be conflicting with real enemy types)
 HAMMER_TYPE = 0x0abc0af
