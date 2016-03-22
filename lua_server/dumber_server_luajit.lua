@@ -2,6 +2,8 @@ local serpent = require("serpent")
 local socket = require("socket")
 local Set = require("set")
 local binser = require("binser")
+local bitser = require("bitser")
+bitser.reserveBuffer(1024 * 1024 * 3)
 local MessagePack = require("MessagePack")
 -- TODO local functions?
 
@@ -197,7 +199,7 @@ function getSerializedNetwork(t_species, t_genome)
 		return serializedNetworks[lookup]
 	else
 		-- Otherwise, serialize, place in lookup table, and return
-		local network = MessagePack.pack(pool.species[t_species].genomes[t_genome].network)
+		local network = bitser.dumps(pool.species[t_species].genomes[t_genome].network)
 		serializedNetworks[lookup] = network
 		return network
 	end
@@ -1044,7 +1046,10 @@ end
 function writeBackup(filename, secondsAdded, framesAdded)
 	local backupPath = backupDir .. filename
 	local file = io.open(backupPath, "w")
-	binser.writeFile(backupPath .. "POOL", pool)
+	local poolFile = io.open(backupPath .. "POOL", "w")
+	poolFile:write(bitser.dumps(pool))
+	poolFile:close()
+	--binser.writeFile(backupPath .. "POOL", pool)
 	file:write(dumpTable(levels))
 	file:write("\n")
 	file:write(dumpTable(clients))
@@ -1070,8 +1075,12 @@ end
 
 function writeGenome(filename, genome)
 	local file = io.open(backupDir .. "genomes/" .. filename, "w")
-	file:write(dumpTable(genome))
+	file:write(serpent.dump(genome, {numformat = "%.50g"}))
 	file:write("\n")
+	file:close()
+
+	file = io.open(backupDir .. "genomes/" .. filename .. "bitser", "w")
+	file:write(bitser.dumps(genome))
 	file:close()
 end
 
@@ -1514,8 +1523,8 @@ local hasAchievedNewMaxFitness = false
 
 local TIME_TO_STOP = false
 
-local dieMsg = MessagePack.pack({die = true}) .. "\n"
-local clientWaitMsg = MessagePack.pack({timeout = CLIENT_WAIT_TIME}) .. "\n"
+local dieMsg = bitser.dumps({die = true}) .. "\n"
+local clientWaitMsg = bitser.dumps({timeout = CLIENT_WAIT_TIME}) .. "\n"
 
 while not TIME_TO_STOP do
 	local percentage = calculatePercentage()
@@ -1540,7 +1549,7 @@ while not TIME_TO_STOP do
 
 	-- Was it good?
 	if not err then
-		local bits = MessagePack.unpack(line)
+		local bits = bitser.loads(line)
 		clientId = bits.clientId
 
 		-- Collect any results that the client returned
@@ -1607,7 +1616,7 @@ while not TIME_TO_STOP do
 					lastSumFitness = fitnessResult
 					addAverage(fitnessAverages, lastSumFitness)
 
-					if playedGenome.fitness > pool.maxFitness then
+					if playedGenome.fitness > 100000 then -- pool.maxFitness then
 						local framesTrained = conf.FramesSpentTraining
 						if not framesTrained then
 							framesTrained = framesSinceLastBackup
@@ -1667,7 +1676,7 @@ while not TIME_TO_STOP do
 				local levelsToPlayArr = setToLevelsArr(job.levelsToPlay)
 				local networkToSend = getSerializedNetwork(job.species, job.genome)
 
-				local response = MessagePack.pack(
+				local response = bitser.dumps(
 					{
 						levels = levelsToPlayArr,
 						generation = pool.generation,
