@@ -3,12 +3,15 @@ local socket = require("socket")
 local Set = require("set")
 local binser = require("binser")
 local bitser = require("bitser")
-bitser.reserveBuffer(1024 * 1024 * 3)
+local memoize = require("memoize")
+bitser.reserveBuffer(1024 * 1024 * 10)
 local MessagePack = require("MessagePack")
 -- TODO local functions?
 
+local pool = nil
+
 -- How many minutes do we wait to save?
-local SAVE_EVERY_N_MINUTES = 10 * 60
+local SAVE_EVERY_N_MINUTES = 5 * 60
 
 -- How many clients are allowed to play a level at once
 -- 1 is the absolute minimum, 2/3 preferred
@@ -273,6 +276,7 @@ function getWorldAndLevel(i)
 	local level = ((i - 1) % 4) + 1
 	return world, level
 end
+getWorldAndLevel = memoize(getWorldAndLevel)
 
 -- Returns the sum of the fitness for this iteration
 function sumFitness()
@@ -385,15 +389,18 @@ function copyGene(gene)
 	return gene2
 end
 
-function newNeuron()
+local function newNeuron()
 	local neuron = {}
 	neuron.incoming = {}
 	neuron.value = 0.0
-	
 	return neuron
 end
 
-function generateNetwork(genome)
+local function sortGenes(a, b)
+	return a.out < b.out
+end
+
+local function generateNetwork(genome)
 	local network = {}
 	network.neurons = {}
 	
@@ -405,9 +412,7 @@ function generateNetwork(genome)
 		network.neurons[MaxNodes+o] = newNeuron()
 	end
 	
-	table.sort(genome.genes, function (a,b)
-		return (a.out < b.out)
-	end)
+	table.sort(genome.genes, sortGenes)
 	for i=1,#genome.genes do
 		local gene = genome.genes[i]
 		if gene.enabled then
@@ -504,6 +509,7 @@ function containsLink(genes, link)
 	end
 end
 
+-- Mutate the value of a connection
 function pointMutate(genome)
 	local step = genome.mutationRates["step"]
 	
@@ -517,6 +523,7 @@ function pointMutate(genome)
 	end
 end
 
+-- Potentially add a new connection
 function linkMutate(genome, forceBias)
 	local neuron1 = randomNeuron(genome.genes, false)
 	local neuron2 = randomNeuron(genome.genes, true)
@@ -548,6 +555,7 @@ function linkMutate(genome, forceBias)
 	table.insert(genome.genes, newLink)
 end
 
+-- Potentially add a new neuron
 function nodeMutate(genome)
 	if #genome.genes == 0 then
 		return
@@ -891,8 +899,14 @@ function newGeneration()
 	pool.generation = pool.generation + 1
 	jobs = generateJobQueue()
 end
+
+local function initializeRun()
+	local species = pool.species[pool.currentSpecies]
+	local genome = species.genomes[pool.currentGenome]
+	generateNetwork(genome)
+end
 	
-function initializePool()
+local function initializePool()
 	--print("initializePool")
 	pool = newPool()
 
@@ -904,26 +918,18 @@ function initializePool()
 	initializeRun()
 end
 
-function initializeRun()
-	local species = pool.species[pool.currentSpecies]
-	local genome = species.genomes[pool.currentGenome]
-	generateNetwork(genome)
-end
-
 --print("is pool nil?")
 if pool == nil then
 	--print("yup")
 	initializePool()
 end
 
--- TODO local pool = pool
-
-function currentJobGenome()
+local function currentJobGenome()
 	local job = jobs[jobs.index]
 	return pool.species[job.species].genomes[job.genome]
 end
 
-function countIncompleteJobs()
+local function countIncompleteJobs()
 	local count = 0
 	for i = 1, #jobs do
 		if Set.size(pool.species[jobs[i].species].genomes[jobs[i].genome].completeness) < NUM_LEVELS then
@@ -934,7 +940,7 @@ function countIncompleteJobs()
 end
 
 -- Advance the index. Assumes there is still a non-finished job available.
-function advanceJobsIndex() 
+local function advanceJobsIndex() 
 	repeat	
 		jobs.index = jobs.index + 1
 		if jobs.index > #jobs then
@@ -943,13 +949,13 @@ function advanceJobsIndex()
 	until Set.size(currentJobGenome().completeness) < NUM_LEVELS
 end
 
-function splitFactor(numClients, numIncompleteJobs)
+local function splitFactor(numClients, numIncompleteJobs)
 	-- TODO experiment
     return (numClients * 5) / numIncompleteJobs
 end
 
 -- TODO: be smarter about this
-function createPartitions(set, numGoalPartitions)
+local function createPartitions(set, numGoalPartitions)
 	local parts = {}
 	for i = 1, numGoalPartitions do
 		parts[#parts + 1] = Set.new({}) 
@@ -969,7 +975,7 @@ function createPartitions(set, numGoalPartitions)
 end
 
 -- TODO: explode in a good order! (long levels first)
-function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
+local function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
 	local splitFactor = math.floor(math.min(splitFactor(activeClients, incompleteJobs), NUM_LEVELS))
 	if splitFactor > 1 then
 		local job = jobs[jobIndex]
@@ -994,7 +1000,7 @@ function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJobs)
 end
 
 -- TODO: make sure we don't send a genome if we just got that genome's results!!
-function findNextNonRequestedGenome()
+local function findNextNonRequestedGenome()
 	if not jobs then
 		jobs = generateJobQueue()
 	end
@@ -1018,38 +1024,23 @@ function findNextNonRequestedGenome()
 	pool.currentGenome = jobs[index].genome
 end
 
-function nextGenome()
-	statscr:mvaddstr(1,1,"in nextGenome" .. pool.currentGenome .. " " .. pool.currentSpecies)    
-	statscr:refresh()
-	pool.currentGenome = pool.currentGenome + 1
-	if pool.currentGenome > #pool.species[pool.currentSpecies].genomes then
-		pool.currentGenome = 1
-		pool.currentSpecies = pool.currentSpecies+1
-		if pool.currentSpecies > #pool.species then
-			newGeneration()
-			pool.currentSpecies = 1
-		end
-	end
-end
-
-function dumpTable(t)
+local function dumpTable(t)
 	return serpent.dump(t, {nohuge=true})
 end
 
 -- Saves any changes made to server config
-function saveConfig()
+local function saveConfig()
 	local file = io.open(configFileName, "w")
 	file:write(dumpTable(conf))
 	file:close()
 end
 
-function writeBackup(filename, secondsAdded, framesAdded)
+local function writeBackup(filename, secondsAdded, framesAdded)
 	local backupPath = backupDir .. filename
 	local file = io.open(backupPath, "w")
 	local poolFile = io.open(backupPath .. "POOL", "w")
 	poolFile:write(bitser.dumps(pool))
 	poolFile:close()
-	--binser.writeFile(backupPath .. "POOL", pool)
 	file:write(dumpTable(levels))
 	file:write("\n")
 	file:write(dumpTable(clients))
@@ -1073,22 +1064,19 @@ function writeBackup(filename, secondsAdded, framesAdded)
 	saveConfig()
 end
 
-function writeGenome(filename, genome)
-	local file = io.open(backupDir .. "genomes/" .. filename, "w")
-	file:write(serpent.dump(genome, {numformat = "%.50g"}))
-	file:write("\n")
-	file:close()
-
-	file = io.open(backupDir .. "genomes/" .. filename .. "bitser", "w")
+local function writeGenome(filename, genome)
+	local file = io.open(backupDir .. "genomes/" .. filename .. "bitser", "w")
 	file:write(bitser.dumps(genome))
 	file:close()
+	-- For trivial plain lua compatibility. Not we could transform between the two easily as well.
+	binser.writeFile(backupDir .. "genomes/" .. filename .. "binser", genome)
 end
 
-function loadBackup(filename)
+local function loadBackup(filename)
 	print("Loading backup: " .. filename)
 	local file = io.open(filename, "r")
 	local binFile = io.open(filename .. "POOL", "r")
-	pool = binser.deserializeN(binFile:read("*all"), 1)
+	pool = bitser.loads(binFile:read("*all"))
 	ok2, levels = serpent.load(file:read("*line"))
 	ok3, clients = serpent.load(file:read("*line"))
 	file:close()
@@ -1098,7 +1086,7 @@ end
 
 clearLevels()
 
-function printBanner(percentage)
+local function printBanner(percentage)
 	-- Print previous results
 	bannerscr:mvaddstr(1,1,string.format(" %s", Name))
 	bannerscr:mvaddstr(2,1,string.format(" [Stop] Gen: %d Fitness: %d Time: %d Frames: %d", StopGeneration, StopFitness, StopTimeSeconds, StopFrames))
@@ -1112,27 +1100,33 @@ function printBanner(percentage)
 end
 
 -- W Y R M B C G
-function setColor(numLevelsComplete)
+local function setColor(numLevelsComplete)
 	local percentageComplete = (numLevelsComplete / NUM_LEVELS) * 100
 	if percentageComplete < 16.66 then
 		-- white
 	elseif percentageComplete < 33.33 then
 		genomescr:attron(curses.color_pair(7)) -- yellow
+		return 7
 	elseif percentageComplete < 49.99 then
 		genomescr:attron(curses.color_pair(2)) -- red
+		return 2
 	elseif percentageComplete < 66.66 then
 		genomescr:attron(curses.color_pair(4)) -- magenta
+		return 4
 	elseif percentageComplete < 83.33 then
 		genomescr:attron(curses.color_pair(5)) -- blue
+		return 5
 	elseif percentageComplete < 99.99 then
 		genomescr:attron(curses.color_pair(6)) -- cyan
+		return 6
 	else
 		genomescr:attron(curses.color_pair(1)) -- green
+		return 1
 	end
 end
 
 -- TODO: This assumes those that requested it also checked it in. 
-function printGenomeDisplay()
+local function printGenomeDisplay()
 	local jobIndex = 1
 	genomescr:move(1,1)
 	local s = 1
@@ -1162,16 +1156,11 @@ function printGenomeDisplay()
 				end
 			end
 
-			setColor(Set.size(genome.completeness))
-
+			local color = setColor(Set.size(genome.completeness))
 			genomescr:addch(char)
-			genomescr:attroff(curses.color_pair(1))
-			genomescr:attroff(curses.color_pair(2))
-			genomescr:attroff(curses.color_pair(3))
-			genomescr:attroff(curses.color_pair(4))
-			genomescr:attroff(curses.color_pair(5))
-			genomescr:attroff(curses.color_pair(6))
-			genomescr:attroff(curses.color_pair(7))
+			if color then
+				genomescr:attroff(curses.color_pair(color))
+			end
 			jobIndex = jobIndex + 1
 			g = g + 1
 		end
@@ -1181,7 +1170,7 @@ function printGenomeDisplay()
 	genomescr:refresh()
 end
 
-function getHistoBuckets(avgs, num_buckets, max_per_bucket)
+local function getHistoBuckets(avgs, num_buckets, max_per_bucket)
 	buckets = {}
 	for i = 1, num_buckets do
 		buckets[i] = 0
@@ -1206,7 +1195,7 @@ function getHistoBuckets(avgs, num_buckets, max_per_bucket)
 	return buckets
 end
 
-function printHistoDisplay()
+local function printHistoDisplay()
 	local num_buckets = 50
 	local max_per_bucket = histoscrheight - 4
 	local buckets = getHistoBuckets(fitnessAverages, num_buckets, histoscrheight - 5)
@@ -1243,7 +1232,7 @@ function printHistoDisplay()
 	end
 end
 
-function printLevelsDisplay()
+local function printLevelsDisplay()
 	-- Don't print levels until we have results.
 	if not last_levels then
 		return
@@ -1279,7 +1268,7 @@ function printLevelsDisplay()
 	levelscr:refresh()
 end
 
-function printClientsDisplay()
+local function printClientsDisplay()
 	clientscr:mvaddstr(1,1," a | id      client | genomes        | frames     | stale")
 	local totalLevelsPlayed = 0
 	for client, stats in pairs(clients) do
@@ -1304,12 +1293,12 @@ function printClientsDisplay()
 	clientscr:refresh()
 end
 
-function printBoard(percentage)
+local function printBoard(percentage)
 	printClientsDisplay()
-	printLevelsDisplay()
+	--printLevelsDisplay()
 	printBanner(percentage)
 	printGenomeDisplay()
-	printHistoDisplay()
+	--printHistoDisplay() Profiling says this takes 9% of our CPU time...
 end
 
 ------------------------------- Averages --------------------------------
@@ -1319,7 +1308,7 @@ local TimeAverageSize = math.floor(Population * 3)
 local FramesAverageSize = math.floor(Population * 3)
 local FitnessAverageSize = Population
 
-function createAverage(size)
+local function createAverage(size)
 	averages = {}
 	for z = 1, size do
 		averages[z] = 0
@@ -1328,7 +1317,7 @@ function createAverage(size)
 	return averages
 end
 
-function addAverage(averages, value)
+local function addAverage(averages, value)
 	averages[averages.index] = value
 	averages.index = averages.index + 1
 	if averages.index > #averages then
@@ -1336,11 +1325,12 @@ function addAverage(averages, value)
 	end
 end
 
-function getAverage(averages)
+local function getAverage(averages)
 	local total = 0
 	local num = 0
-	for key, value in pairs(averages) do
-		if key ~= "index" and value ~= 0 then
+	for key = 1, #averages do
+		local value = averages[key]
+		if value then
 			total = total + value
 			num = num + 1
 		end
@@ -1354,7 +1344,7 @@ fitnessAverages = createAverage(FitnessAverageSize)
 
 --------------------------- End averages --------------------------------
 
-function calculateFitness(level, stateIndex)
+local function calculateFitness(level, stateIndex)
 	if not level.a then
 		return 0
 	end
@@ -1370,7 +1360,7 @@ function calculateFitness(level, stateIndex)
 	return 100 + (multi * result) - timePenalty
 end
 
-function calculateTotalFitness(lvls, resultsToUse)
+local function calculateTotalFitness(lvls, resultsToUse)
 	local total = 0
 	for stateIndex = 1, #lvls do
 		-- Only use results that are in resultsToUse
@@ -1381,7 +1371,7 @@ function calculateTotalFitness(lvls, resultsToUse)
 	return total
 end
 
-function calculatePercentage()
+local function calculatePercentage()
 	-- Calculating percent of generation done
 	local measured = 0
 	local total = 0
@@ -1395,7 +1385,7 @@ function calculatePercentage()
 	return (measured / total) * 100
 end
 
-function sumFrames(lvls, resultsToUse)
+local function sumFrames(lvls, resultsToUse)
 	local totalFrames = 0
 	for i = 1, #lvls do
 		-- Only use results that are in resultsToUse
@@ -1407,7 +1397,7 @@ function sumFrames(lvls, resultsToUse)
 end
 
 -- Add victory and frame statistics to the levels array
-function addStats(results, resultsToUse)
+local function addStats(results, resultsToUse)
 	for i = 1, #results do
 		-- Only use results that are in resultsToUse
 		if resultsToUse[i] then
@@ -1440,7 +1430,7 @@ function countActiveClients()
 	return count
 end
 
-function nextClientChar(clients)
+local function nextClientChar(clients)
 	max = string.byte('a') - 1
 	for clientId, stats in pairs(clients) do
 		cur = stats.char
@@ -1451,7 +1441,7 @@ function nextClientChar(clients)
 	return string.char(max + 1)
 end
 
-function findJobIndex(genome, species, resultType)
+local function findJobIndex(genome, species, resultType)
 	if jobs then
 		for index, job in pairs(jobs) do
 			if type(job) ~= "number"
@@ -1463,7 +1453,7 @@ function findJobIndex(genome, species, resultType)
 	return -1
 end
 
-function reachedStoppingCondition()
+local function reachedStoppingCondition()
 	if StopGeneration > 0 and pool.generation >= StopGeneration then
 		return "Max generation of " .. StopGeneration .. " reached!"
 	elseif StopFitness > 0 and pool.maxFitness >= StopFitness then
@@ -1530,6 +1520,15 @@ while not TIME_TO_STOP do
 	local percentage = calculatePercentage()
 	local startTime = socket.gettime()
 
+	-- Find the first open, non-requested spot (get ready for incoming client).
+	-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
+	-- TODO: Fix holes? Set to nil when we send, check nillity here before re-setting
+	findNextNonRequestedGenome()
+	initializeRun()
+	local job = jobs[jobs.index]
+	local levelsToPlayArr = setToLevelsArr(job.levelsToPlay)
+	local networkToSend = getSerializedNetwork(job.species, job.genome)
+
 	local startTimeWaiting = socket.gettime()
 	local client = server:accept()
 	totalTimeWaiting = totalTimeWaiting + (socket.gettime() - startTimeWaiting)
@@ -1550,10 +1549,12 @@ while not TIME_TO_STOP do
 	-- Was it good?
 	if not err then
 		local bits = bitser.loads(line)
-		clientId = bits.clientId
+		if bits then
+			clientId = bits.clientId
+		end
 
 		-- Collect any results that the client returned
-		if bits.levelsPlayed then
+		if bits and bits.levelsPlayed then
 			local r_generation = bits.generation
 			local r_species = bits.species
 			local r_genome = bits.genome
@@ -1616,7 +1617,7 @@ while not TIME_TO_STOP do
 					lastSumFitness = fitnessResult
 					addAverage(fitnessAverages, lastSumFitness)
 
-					if playedGenome.fitness > 100000 then -- pool.maxFitness then
+					if playedGenome.fitness > pool.maxFitness then
 						local framesTrained = conf.FramesSpentTraining
 						if not framesTrained then
 							framesTrained = framesSinceLastBackup
@@ -1655,12 +1656,7 @@ while not TIME_TO_STOP do
 			client:send(dieMsg)
 		-- Otherwise, send the next network to play
 		elseif stop_sending_levels ~= "true" then
-			-- Find the first open, non-requested spot.
-			-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
-			findNextNonRequestedGenome()
-			initializeRun()
-
-			-- See how many times this job has been requested
+			-- See how many times this job has been requested (initialized before socket was opened)
 			local job = jobs[jobs.index]
 			local genome = pool.species[job.species].genomes[job.genome]
 
@@ -1672,10 +1668,6 @@ while not TIME_TO_STOP do
 				-- Add some decay so that we don't ever get stuck TODO tweak
 				job.request_count = job.request_count - DECAY
 			else
-				-- TODO: Consider caching this value too
-				local levelsToPlayArr = setToLevelsArr(job.levelsToPlay)
-				local networkToSend = getSerializedNetwork(job.species, job.genome)
-
 				local response = bitser.dumps(
 					{
 						levels = levelsToPlayArr,
@@ -1684,7 +1676,6 @@ while not TIME_TO_STOP do
 						genome = job.genome,
 						networkStr = networkToSend
 					}) .. "\n"
-				clientscr:mvaddstr(10,1,"last request index: " .. jobs.index .. "    ")
 				client:send(response)
 				genome.last_requested = pool.generation
 				if clients[clientId] and clients[clientId].char then
