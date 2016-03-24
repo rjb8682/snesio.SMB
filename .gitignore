@@ -7,3 +7,5 @@
 *.checkpoint
 config.txt
 config.ini
+HappyQuickNes
+zeromq-2.2.0
