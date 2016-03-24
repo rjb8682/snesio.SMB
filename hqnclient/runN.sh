@@ -1,6 +1,5 @@
 echo "Spawning $1 processes"
-for i in {1..$1}
+for ((i = 1; i <= $1; i++)) 
 do
-    echo "test"
-    ( ./run_loop.sh zmqclient.lua & )
+    ./run_loop.sh zmqclient.lua &
 done
