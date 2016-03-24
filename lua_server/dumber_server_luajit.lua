@@ -10,6 +10,8 @@ local MessagePack = require("MessagePack")
 
 local pool = nil
 
+local incompleteJobCount = 999
+
 -- How many minutes do we wait to save?
 local SAVE_EVERY_N_MINUTES = 5 * 60
 
@@ -859,6 +861,7 @@ function generateJobQueue()
 			pool.species[s].genomes[g].completeness = {} 
 		end
 	end
+	incompleteJobCount = count
 	jobs.index = 0
 	return jobs
 end
@@ -929,16 +932,6 @@ local function currentJobGenome()
 	return pool.species[job.species].genomes[job.genome]
 end
 
-local function countIncompleteJobs()
-	local count = 0
-	for i = 1, #jobs do
-		if Set.size(pool.species[jobs[i].species].genomes[jobs[i].genome].completeness) < NUM_LEVELS then
-			count = count + 1
-		end
-	end
-	return count
-end
-
 -- Advance the index. Assumes there is still a non-finished job available.
 local function advanceJobsIndex() 
 	repeat	
@@ -951,7 +944,7 @@ end
 
 local function splitFactor(numClients, numIncompleteJobs)
 	-- TODO experiment
-    return (numClients * 5) / numIncompleteJobs
+    return (numClients * 3) / numIncompleteJobs
 end
 
 -- TODO: be smarter about this
@@ -1005,10 +998,8 @@ local function findNextNonRequestedGenome()
 		jobs = generateJobQueue()
 	end
 
-	local incompleteJobs = countIncompleteJobs()
-
 	-- If there are no more jobs, then make a new generation.
-	if incompleteJobs == 0 then
+	if incompleteJobCount == 0 then
 		newGeneration()
 	end
 
@@ -1018,7 +1009,7 @@ local function findNextNonRequestedGenome()
 	local index = jobs.index
 
 	-- Do we have way too many clients?
-	maybeExplodeJobIndex(jobs, index, countActiveClients(), countIncompleteJobs())
+	maybeExplodeJobIndex(jobs, index, countActiveClients(), incompleteJobCount)
 
 	pool.currentSpecies = jobs[index].species
 	pool.currentGenome = jobs[index].genome
@@ -1611,6 +1602,9 @@ while not TIME_TO_STOP do
 
 				-- Are we finished?
 				if Set.size(playedGenome.completeness) == NUM_LEVELS then
+					-- Mark that we've completed one more job
+					incompleteJobCount = incompleteJobCount - 1
+
 					-- Release the memory for the serialized network
 					removeSerializedNetwork(r_species, r_genome)
 
