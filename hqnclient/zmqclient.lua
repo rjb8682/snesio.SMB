@@ -69,8 +69,7 @@ function loadConfigFile()
 	if config.clientId == "hostname" then
 		local hostname = socket.dns.gethostname()
 		if hostname then
-			-- Limit to 12 chars
-			config.clientId = string.sub(hostname, 1, 12)
+			config.clientId = hostname
 		end
 	end
 end
