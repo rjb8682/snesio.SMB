@@ -41,3 +41,4 @@ cp HappyQuickNes/hqnes hqnclient
 echo "Installing lua dependencies..."
 sudo luarocks install luasocket
 sudo luarocks install lua-zmq
+sudo ldconfig
