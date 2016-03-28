@@ -5,16 +5,19 @@ local bitser = require("bitser")
 local memoize = require("memoize")
 local socket = require("socket") -- for time only
 local zmq = require("zmq")
-bitser.reserveBuffer(1024 * 1024 * 10)
+bitser.reserveBuffer(1024 * 1024 * 3)
 local MessagePack = require("MessagePack")
 -- TODO local functions?
+
+-- How many frames of results we've obtained since backing up
+local framesSinceLastBackup = 0
 
 local pool = nil
 
 local incompleteJobCount = 999
 
 -- How many minutes do we wait to save?
-local SAVE_EVERY_N_MINUTES = 5 * 60
+local SAVE_EVERY_N_MINUTES = 10 * 60
 
 if #arg == 0 then
 	print("usage: lua server.lua run_name")
@@ -935,13 +938,14 @@ end
 
 local function splitFactor(numClients, numIncompleteJobs)
 	-- TODO experiment
-    return (numClients * 3) / numIncompleteJobs
+    return (numClients * 5) / numIncompleteJobs
 end
 
 -- TODO: be smarter about this
 local function createPartitions(set, numGoalPartitions)
 	local parts = {}
-	for i = 1, numGoalPartitions do
+	local maxPartitions = math.min(Set.size(set), numGoalPartitions)
+	for i = 1, maxPartitions do
 		parts[#parts + 1] = Set.new({}) 
 	end
 	local cur = 1
@@ -964,8 +968,7 @@ local function maybeExplodeJobIndex(jobs, jobIndex, activeClients, incompleteJob
 	if splitFactor > 1 then
 		local job = jobs[jobIndex]
 
-		if Set.size(job.levelsToPlay) < NUM_LEVELS then
-			-- Don't split already split levels. TODO avoid this...?
+		if Set.size(job.levelsToPlay) <= 1 then
 			return
 		end
 
@@ -1270,7 +1273,7 @@ local function printClientsDisplay()
 		end
 		local y, x = clientscr:getyx()
 		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %12s | %7.1f %5.1f%% | %10d | %5.1f",
-			active, stats.char, client, stats.levelsPlayed / 22, percent, stats.framesPlayed, stats.staleLevels / 22))
+			active, stats.char, string.sub(client, 1, 12), stats.levelsPlayed / 22, percent, stats.framesPlayed, stats.staleLevels / 22))
 	end
 	clientscr:refresh()
 end
@@ -1404,7 +1407,7 @@ function countActiveClients()
 	for clientId, stats in pairs(clients) do
 		if isFreshClient(clientId, now) then
 			-- Assume that each client represents four emulators
-			count = count + 4
+			count = count + 16 
 		end
 	end
 	statscr:mvaddstr(9,1,count .. " active clients")
@@ -1444,7 +1447,7 @@ local function reachedStoppingCondition()
 				and conf.TimeSpentTraining >= StopTimeSeconds then
 		return "Stopping time of " .. StopTimeSeconds .. " reached!"
 	elseif StopFrames > 0 and conf.FramesSpentTraining
-				and conf.FramesSpentTraining >= StopFrames then
+				and (conf.FramesSpentTraining + framesSinceLastBackup) >= StopFrames then
 		return "Stopping frames of " .. StopFrames .. " reached!"
 	end
 
@@ -1468,9 +1471,6 @@ lastGeneration = pool.generation
 
 -- How long since we saved a generation
 lastSaved = socket.gettime()
-
--- How many frames of results we've obtained since backing up
-local framesSinceLastBackup = 0
 
 pool.currentSpecies = 1
 pool.currentGenome = 1
@@ -1497,213 +1497,230 @@ local TIME_TO_STOP = false
 
 local dieMsg = bitser.dumps({die = true})
 
-while not TIME_TO_STOP do
-	local percentage = calculatePercentage()
-	local startTime = socket.gettime()
+local function runServer()
+	while not TIME_TO_STOP do
+		local percentage = calculatePercentage()
+		local startTime = socket.gettime()
 
-	-- Find the first open, non-requested spot (get ready for incoming client).
-	-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
-	-- TODO: Fix holes? Set to nil when we send, check nillity here before re-setting
-	findNextNonRequestedGenome()
-	initializeRun()
-	local job = jobs[jobs.index]
-	local levelsToPlayArr = setToLevelsArr(job.levelsToPlay)
-	local serializeTime = socket.gettime()
-	local networkToSend = getSerializedNetwork(job.species, job.genome)
-	serializeTime = socket.gettime() - serializeTime
+		-- Find the first open, non-requested spot (get ready for incoming client).
+		-- Sets currentSpecies / currentGenome to a requested spot if all have been requested.
+		-- TODO: Fix holes? Set to nil when we send, check nillity here before re-setting
+		findNextNonRequestedGenome()
+		initializeRun()
+		local job = jobs[jobs.index]
+		local levelsToPlayArr = setToLevelsArr(job.levelsToPlay)
+		local serializeTime = socket.gettime()
+		local networkToSend = getSerializedNetwork(job.species, job.genome)
+		serializeTime = socket.gettime() - serializeTime
 
-	local startTimeWaiting = socket.gettime()
-	-- Receive identifying headers
-	local address = server:recv()
-	local empty = server:recv()
-	totalTimeWaiting = totalTimeWaiting + (socket.gettime() - startTimeWaiting)
-	local startTimeCommunicating = socket.gettime()
-	-- Receive the line
-	local line = server:recv()
+		local startTimeWaiting = socket.gettime()
+		-- Receive identifying headers
+		local address = server:recv()
+		local empty = server:recv()
+		totalTimeWaiting = totalTimeWaiting + (socket.gettime() - startTimeWaiting)
+		local startTimeCommunicating = socket.gettime()
+		-- Receive the line
+		local line = server:recv()
 
-	connectionCount = connectionCount + 1
+		connectionCount = connectionCount + 1
 
-	local stop_sending_levels = false
-	local versionCode = nil
+		local stop_sending_levels = false
+		local versionCode = nil
 
-	-- Was it good?
-	if not err then
-		local bits = bitser.loads(line)
-		if bits then
-			clientId = bits.clientId
-		end
-
-		-- Collect any results that the client returned
-		if bits and bits.levelsPlayed then
-			local r_generation = bits.generation
-			local r_species = bits.species
-			local r_genome = bits.genome
-			versionCode = bits.versionCode
-			local r_levels = bits.levelsPlayed
-			stop_sending_levels = bits.timeToDie
-
-			if not (r_generation and r_species and versionCode and r_levels) then
-				io.stderr:write("panic!")
-				io.stderr:write(serpent.dump(bits))
-			end	
-
-			-- Is this a new client?
-			if not clients[clientId] then
-				clients[clientId] = {
-					levelsPlayed = 0,
-					framesPlayed = 0,
-					staleLevels = 0,
-					lastCheckIn = 0,
-					char = nextClientChar(clients)}
-			end
-			clients[clientId].lastCheckIn = socket.gettime()
-
-			local resultSet = resultsToSet(r_levels)
-
-			-- Assume non valid / completely stale unless there's a corresponding genome
-			local validResultSet = {}
-			local staleResultSet = resultSet
-
-			local playedGenome = nil
-			if pool.species[r_species] and pool.species[r_species].genomes[r_genome] then
-				playedGenome = pool.species[r_species].genomes[r_genome]
-				validResultSet = resultSet - playedGenome.completeness
-				staleResultSet = resultSet * playedGenome.completeness
+		-- Was it good?
+		if not err then
+			local bits = bitser.loads(line)
+			if bits then
+				clientId = bits.clientId
 			end
 
-			-- Only use fresh results from new clients (if we haven't already received this result)
-			if r_generation == pool.generation
-				and versionCode == VERSION_CODE
-				and playedGenome
-				and Set.size(playedGenome.completeness) < NUM_LEVELS
-				and Set.size(validResultSet) > 0 then
+			-- Collect any results that the client returned
+			if bits and bits.levelsPlayed then
+				local r_generation = bits.generation
+				local r_species = bits.species
+				local r_genome = bits.genome
+				versionCode = bits.versionCode
+				local r_levels = bits.levelsPlayed
+				stop_sending_levels = bits.timeToDie
 
-				-- Only compute the fitness for the valid result set
-				local fitnessResult = calculateTotalFitness(r_levels, validResultSet)
-				playedGenome.fitness = playedGenome.fitness + fitnessResult
-				playedGenome.completeness = playedGenome.completeness + validResultSet
+				if not (r_generation and r_species and versionCode and r_levels) then
+					io.stderr:write("panic!")
+					io.stderr:write(serpent.dump(bits))
+				end	
 
-				-- Total up frame counts
-				local totalFrames = sumFrames(r_levels, validResultSet)
-				addAverage(frameAverages, totalFrames)
-				total_frames_session = total_frames_session + totalFrames
-				framesSinceLastBackup = framesSinceLastBackup + totalFrames
+				-- Is this a new client?
+				if not clients[clientId] then
+					clients[clientId] = {
+						levelsPlayed = 0,
+						framesPlayed = 0,
+						staleLevels = 0,
+						lastCheckIn = 0,
+						char = nextClientChar(clients)}
+				end
+				clients[clientId].lastCheckIn = socket.gettime()
 
-				-- Are we finished?
-				if Set.size(playedGenome.completeness) == NUM_LEVELS then
-					-- Mark that we've completed one more job
-					incompleteJobCount = incompleteJobCount - 1
+				local resultSet = resultsToSet(r_levels)
 
-					-- Release the memory for the serialized network
-					removeSerializedNetwork(r_species, r_genome)
+				-- Assume non valid / completely stale unless there's a corresponding genome
+				local validResultSet = {}
+				local staleResultSet = resultSet
 
-					lastSumFitness = fitnessResult
-					addAverage(fitnessAverages, lastSumFitness)
-
-					if playedGenome.fitness > pool.maxFitness then
-						local framesTrained = conf.FramesSpentTraining
-						if not framesTrained then
-							framesTrained = framesSinceLastBackup
-						end
-						writeGenome(tostring(playedGenome.fitness) .. "_" .. framesTrained .. ".genome", playedGenome)
-						pool.maxFitness = playedGenome.fitness
-						-- Make sure we save this generation once it's over
-						hasAchievedNewMaxFitness = true
-					end
+				local playedGenome = nil
+				if pool.species[r_species] and pool.species[r_species].genomes[r_genome] then
+					playedGenome = pool.species[r_species].genomes[r_genome]
+					validResultSet = resultSet - playedGenome.completeness
+					staleResultSet = resultSet * playedGenome.completeness
 				end
 
-				-- Since we got a valid result, update the times.
-				addAverage(timeAverages, socket.gettime() - startTime)
+				-- Only use fresh results from new clients (if we haven't already received this result)
+				if r_generation == pool.generation
+					and versionCode == VERSION_CODE
+					and playedGenome
+					and Set.size(playedGenome.completeness) < NUM_LEVELS
+					and Set.size(validResultSet) > 0 then
 
-				-- Add any victories we achieved and frames played
-				addStats(r_levels, validResultSet)
+					-- Only compute the fitness for the valid result set
+					local fitnessResult = calculateTotalFitness(r_levels, validResultSet)
+					playedGenome.fitness = playedGenome.fitness + fitnessResult
+					playedGenome.completeness = playedGenome.completeness + validResultSet
 
-				-- Update client stats
-				clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + Set.size(validResultSet)
-				-- TODO: add
-				clients[clientId].framesPlayed = clients[clientId].framesPlayed + totalFrames
+					-- Total up frame counts
+					local totalFrames = sumFrames(r_levels, validResultSet)
+					addAverage(frameAverages, totalFrames)
+					total_frames_session = total_frames_session + totalFrames
+					framesSinceLastBackup = framesSinceLastBackup + totalFrames
 
-				-- TODO: this causes the issues with printing
-				last_levels = r_levels
-				last_generation = r_generation
-				last_species = r_species
-				last_genome = r_genome
-			else
-				-- Didn't make it in time--update stale counter
-				clients[clientId].staleLevels = clients[clientId].staleLevels + Set.size(staleResultSet)
+					-- Are we finished?
+					if Set.size(playedGenome.completeness) == NUM_LEVELS then
+						-- Mark that we've completed one more job
+						incompleteJobCount = incompleteJobCount - 1
+
+						-- Release the memory for the serialized network
+						removeSerializedNetwork(r_species, r_genome)
+
+						lastSumFitness = fitnessResult
+						addAverage(fitnessAverages, lastSumFitness)
+
+						if playedGenome.fitness > pool.maxFitness then
+							-- local framesTrained = conf.FramesSpentTraining
+							-- if not framesTrained then
+							-- 	framesTrained = framesSinceLastBackup
+							-- end
+							local framesTrained = framesSinceLastBackup
+							if conf.FramesSpentTraining then
+								framesTrained = framesSinceLastBackup + conf.FramesSpentTraining
+							end
+							writeGenome(tostring(playedGenome.fitness) .. "_" .. framesTrained .. ".genome", playedGenome)
+							pool.maxFitness = playedGenome.fitness
+							-- Make sure we save this generation once it's over
+							hasAchievedNewMaxFitness = true
+
+							-- Tell the world about it!
+							io.popen(string.format("slack-post-max-fitness %9.1f %s %d",
+								pool.maxFitness, conf.Name, pool.generation))
+						end
+					end
+
+					-- Since we got a valid result, update the times.
+					addAverage(timeAverages, socket.gettime() - startTime)
+
+					-- Add any victories we achieved and frames played
+					addStats(r_levels, validResultSet)
+
+					-- Update client stats
+					clients[clientId].levelsPlayed = clients[clientId].levelsPlayed + Set.size(validResultSet)
+					-- TODO: add
+					clients[clientId].framesPlayed = clients[clientId].framesPlayed + totalFrames
+
+					-- TODO: this causes the issues with printing
+					last_levels = r_levels
+					last_generation = r_generation
+					last_species = r_species
+					last_genome = r_genome
+				else
+					-- Didn't make it in time--update stale counter
+					clients[clientId].staleLevels = clients[clientId].staleLevels + Set.size(staleResultSet)
+				end
 			end
-		end
 
-		-- If this client is running bad code, stop him in his tracks.
-		if versionCode and versionCode ~= VERSION_CODE then
-			server:send(dieMsg)
-		-- Otherwise, send the next network to play
-		elseif stop_sending_levels ~= "true" then
-			-- See how many times this job has been requested (initialized before socket was opened)
-			local job = jobs[jobs.index]
-			local genome = pool.species[job.species].genomes[job.genome]
-			local response = bitser.dumps(
-				{
-					levels = levelsToPlayArr,
-					generation = pool.generation,
-					species = job.species,
-					genome = job.genome,
-					networkStr = networkToSend
-				})
-			server:send(address, zmq.SNDMORE)
-		    server:send("", zmq.SNDMORE)
-		    server:send(response) -- Workload
-			genome.last_requested = pool.generation
-			if clients[clientId] and clients[clientId].char then
-				genome.request_char = clients[clientId].char
+			-- If this client is running bad code, stop him in his tracks.
+			if versionCode and versionCode ~= VERSION_CODE then
+				server:send(dieMsg)
+			-- Otherwise, send the next network to play
+			elseif stop_sending_levels ~= "true" then
+				-- See how many times this job has been requested (initialized before socket was opened)
+				local job = jobs[jobs.index]
+				local genome = pool.species[job.species].genomes[job.genome]
+				local response = bitser.dumps(
+					{
+						levels = levelsToPlayArr,
+						generation = pool.generation,
+						species = job.species,
+						genome = job.genome,
+						networkStr = networkToSend
+					})
+				server:send(address, zmq.SNDMORE)
+			    server:send("", zmq.SNDMORE)
+			    server:send(response) -- Workload
+				genome.last_requested = pool.generation
+				if clients[clientId] and clients[clientId].char then
+					genome.request_char = clients[clientId].char
+				end
+				job.request_count = job.request_count + 1
 			end
-			job.request_count = job.request_count + 1
+			totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
+		else
+			io.stderr:write(print("Error: " .. err))
 		end
-		totalTimeCommunicating = totalTimeCommunicating + (socket.gettime() - startTimeCommunicating)
-	else
-		io.stderr:write(print("Error: " .. err))
-	end
 
-	printBoard(percentage)
+		printBoard(percentage)
 
-	-- Is it a new generation?
-	if lastGeneration ~= pool.generation then
-		lastGeneration = pool.generation
+		-- Is it a new generation?
+		if lastGeneration ~= pool.generation then
+			lastGeneration = pool.generation
 
-        -- Only check stopping condition once generation is over
-        if reachedStoppingCondition() then
-            TIME_TO_STOP = true
-        end
+	        -- Only check stopping condition once generation is over
+	        if reachedStoppingCondition() then
+	            TIME_TO_STOP = true
+	        end
 
-		-- Save a backup of the generation, if it's been long enough (or we won!)
-		local timeSinceLastBackup = socket.gettime() - lastSaved
-		if timeSinceLastBackup >= SAVE_EVERY_N_MINUTES
-			or hasAchievedNewMaxFitness
-            or TIME_TO_STOP then
-			writeBackup("backup." .. pool.generation .. ".NEW_GENERATION",
-				timeSinceLastBackup, framesSinceLastBackup)
-			framesSinceLastBackup = 0
-			lastSaved = socket.gettime()
-			lastCheckpoint = os.date("%c", os.time())
+			-- Save a backup of the generation, if it's been long enough (or we won!)
+			local timeSinceLastBackup = socket.gettime() - lastSaved
+			if timeSinceLastBackup >= SAVE_EVERY_N_MINUTES
+				--or hasAchievedNewMaxFitness
+	            or TIME_TO_STOP then
+				writeBackup("backup." .. pool.generation .. ".NEW_GENERATION",
+					timeSinceLastBackup, framesSinceLastBackup)
+				collectgarbage()
+				framesSinceLastBackup = 0
+				lastSaved = socket.gettime()
+				lastCheckpoint = os.date("%c", os.time())
+			end
+			hasAchievedNewMaxFitness = false
 		end
-		hasAchievedNewMaxFitness = false
-	end
 
-	local endTime = socket.gettime()
-	local averageTime = getAverage(timeAverages)
-	local frameAverage = getAverage(frameAverages)
-	statscr:mvaddstr(1,1,string.format("   last: %5.3f  ", endTime - startTime))
-	statscr:mvaddstr(2,1,string.format("average: %5.3f  ", averageTime))
-	statscr:mvaddstr(3,1,string.format("frames played per second   (avg): %7.0f  ",
-		frameAverage / averageTime))
-	statscr:mvaddstr(4,1,string.format("frames played per second (total): %7.0f  ",
-		total_frames_session / (endTime - start_of_session)))
-	statscr:mvaddstr(5,1,string.format("%1.3f ser | %5.3fs waiting | %6.4fs comm",
-		serializeTime, totalTimeWaiting, totalTimeCommunicating))
-	if lastCheckpoint then
-		statscr:mvaddstr(7,1,"last saved: " .. lastCheckpoint)
+		local endTime = socket.gettime()
+		local averageTime = getAverage(timeAverages)
+		local frameAverage = getAverage(frameAverages)
+		statscr:mvaddstr(1,1,string.format("   last: %5.3f  ", endTime - startTime))
+		statscr:mvaddstr(2,1,string.format("average: %5.3f  ", averageTime))
+		statscr:mvaddstr(3,1,string.format("frames played per second   (avg): %7.0f  ",
+			frameAverage / averageTime))
+		statscr:mvaddstr(4,1,string.format("frames played per second (total): %7.0f  ",
+			total_frames_session / (endTime - start_of_session)))
+		statscr:mvaddstr(5,1,string.format("%1.3f ser | %5.3fs waiting | %6.4fs comm",
+			serializeTime, totalTimeWaiting, totalTimeCommunicating))
+		if lastCheckpoint then
+			statscr:mvaddstr(7,1,"last saved: " .. lastCheckpoint)
+		end
+		statscr:refresh()
 	end
-	statscr:refresh()
+end
+
+local status, err = pcall(runServer)
+if err then
+	io.popen(string.format("slack-post server-log '@zach SERVER CRASHED: `%s`'", tostring(err)))
+	do return end
 end
 
 server:close()
