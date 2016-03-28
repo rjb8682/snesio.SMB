@@ -42,3 +42,9 @@ echo "Installing lua dependencies..."
 sudo luarocks install luasocket
 sudo luarocks install lua-zmq
 sudo ldconfig
+
+echo "Setting up init"
+sudo cp startEmus.conf /etc/init/
+
+echo "Rebooting"
+sudo reboot
