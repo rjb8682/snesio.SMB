@@ -1,14 +1,14 @@
-sudo apt-get update
-sudo apt-get -y install git
-sudo apt-get -y install make
-sudo apt-get -y install g++
-sudo apt-get -y install libtool
-sudo apt-get -y install pkg-config
-sudo apt-get -y install build-essential
-sudo apt-get -y install autoconf
-sudo apt-get -y install automake
-sudo apt-get -y install uuid-dev
-sudo apt-get -y install luarocks
+apt-get update
+apt-get -y install git
+apt-get -y install make
+apt-get -y install g++
+apt-get -y install libtool
+apt-get -y install pkg-config
+apt-get -y install build-essential
+apt-get -y install autoconf
+apt-get -y install automake
+apt-get -y install uuid-dev
+apt-get -y install luarocks
 
 echo "Installing zeromq..."
 wget http://download.zeromq.org/zeromq-2.2.0.tar.gz
@@ -17,8 +17,8 @@ rm zeromq-2.2.0.tar.gz
 cd zeromq-2.2.0
 ./configure
 make
-sudo make install
-sudo ldconfig
+make install
+ldconfig
 cd ..
 
 git clone https://github.com/Bindernews/HappyQuickNes.git
@@ -30,7 +30,7 @@ tar -xzf LuaJIT-2.0.4.tar.gz
 mv LuaJIT-2.0.4 LuaJIT
 rm LuaJIT-2.0.4.tar.gz
 cd LuaJIT
-sudo make install
+make install
 cd ../linux
 echo "Installing HappyQuickNes..."
 make
@@ -39,12 +39,12 @@ cd ../..
 cp HappyQuickNes/hqnes hqnclient
 
 echo "Installing lua dependencies..."
-sudo luarocks install luasocket
-sudo luarocks install lua-zmq
-sudo ldconfig
+luarocks install luasocket
+luarocks install lua-zmq
+ldconfig
 
 echo "Setting up init"
-sudo cp startEmus.conf /etc/init/
+cp startEmus.conf /etc/init/
 
 echo "Rebooting"
-sudo reboot
+reboot
