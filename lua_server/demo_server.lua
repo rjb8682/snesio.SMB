@@ -1,5 +1,6 @@
 local serpent = require("serpent")
 local socket = require("socket")
+local binser = require("binser")
 local server = assert(socket.bind("*", 67617))
 local ip, port = server:getsockname()
 local runName = "300_run" -- Default run to track
@@ -19,13 +20,13 @@ end
 
 function loadFile(filename, dir)
 	if not filename then return nil end
-	local file = io.open(dir .. filename, "r")
+	local file = io.open(dir .. filename, "rb")
 	if file then
-		genome = file:read("*line")
+        print("found file")
+		genome = file:read("*all")
 		file:close()
-		if genome then
-			return genome .. "\n"
-		end
+        --print(serpent.dump(binser.deserializeN(genome, 1)))
+        return genome
 	end
 	return nil
 end
@@ -38,15 +39,17 @@ function getBestGenome(file_table)
 		toks = mysplit(value)
 		for i, filename in pairs(toks) do
 			if filename then
-				toks = mysplit(filename, ".genome")
-				local fitness = string.match(filename, pat)
-				if fitness ~= nil then
-					fitness = tonumber(fitness)
-					if fitness > bestFitness then
-						bestFitness = fitness
-						bestFile = filename	
-					end
-				end
+				toks = mysplit(filename, ".genomebinser")
+                if #toks > 0 then
+                    local fitness = string.match(filename, pat)
+                    if fitness ~= nil then
+                        fitness = tonumber(fitness)
+                        if fitness > bestFitness then
+                            bestFitness = fitness
+                            bestFile = filename	
+                        end
+                    end
+                end
 			end
 		end
 	end
@@ -142,9 +145,11 @@ while true do
 
             -- Send them the best we got!
             if genome then
+                print("sending genome! length: " .. tostring(#genome))
+                client:send(#genome .. "\n")
                 client:send(genome)
             else
-                client:send("nothing\n")
+                client:send(0)
             end
         end
 	end
