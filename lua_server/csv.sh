@@ -1,5 +1,4 @@
-cd $1
-cd genomes
+cd $1/genomes
 ls -al > filenames
-python3 ../../filenames_to_csv.py
+python3 ../../filenames_to_csv.py $1
 cd ../..
