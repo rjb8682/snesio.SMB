@@ -1,10 +1,11 @@
 local serpent = require("serpent")
 local socket = require("socket")
+local binser = require("binser")
 
 config = {server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=false, clientId="demo"}
 print("Using " .. config.server .. ":" .. config.port)
 
-local runName = "backups_dev" -- default
+local runName = "current" -- default
 
 local shouldSkip = false
 
@@ -586,7 +587,11 @@ function getNewGenome()
 	local client, err = socket.connect(config.server, config.port)
 	if not err then
 		bytes, err = client:send(config.clientId .. "!" .. runName .. "\n")
-		response, err2 = client:receive()
+		responseSize, err2 = client:receive("*line")
+		responseSize = tonumber(responseSize)
+		if responseSize and responseSize > 0 then
+			response, err = client:receive(responseSize)
+		end
 	end
 
 	-- Close the client
@@ -594,12 +599,7 @@ function getNewGenome()
 		client:close()
 	end
 
-	if response and response ~= "nothing" then
-		return response
-	else
-		print("response: " .. tostring(response))
-	end
-	return nil
+	return response
 end
 
 function skipLevel()
@@ -671,7 +671,7 @@ while true do
 	for z = 1, 32 do
 		-- Avoid castles and water levels
 		if z % 4 ~= 0 and z ~= 6 and z ~= 26 then
-			ok, genome = serpent.load(response)
+			genome = binser.deserializeN(response, 1)
 			maxFitness = maxFitness + calculateDemoFitness(playGame(z, genome))
 		end
 
