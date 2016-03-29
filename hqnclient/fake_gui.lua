@@ -4,6 +4,9 @@ local bitser = assert(require("bitser"))
 local curses = assert(require("curses"))
 local socket = assert(require("socket"))
 
+config = {run="current", server="129.21.141.143", port=67617, drawGui=true, drawGenome=true, debug=false, clientId="demo"}
+print("Using " .. config.server .. ":" .. config.port)
+
 local frame = 0
 local start = socket.gettime()
 
@@ -14,6 +17,8 @@ local savestate = savestate
 
 local controller = {}
 local inputs = {}
+
+local INC = 15.5
 
 ----------------- INPUTS ----------------------------
 local ButtonNames = {
@@ -82,6 +87,8 @@ local WIDTH  = BoxRadiusX * 2 + 5
 local HEIGHT = BoxRadiusY * 2 + 5
 local OFFSET = 5
 
+local stdscr  = curses.stdscr()
+stdscr:nodelay(true)
 local gamescr = curses.newwin(HEIGHT, WIDTH, OFFSET, OFFSET)
 local statscr = curses.newwin(10, 30, HEIGHT + OFFSET, OFFSET)
 
@@ -298,8 +305,8 @@ end
 
 
 local lastPrinted = socket.gettime()
-local increment = 1 / 15.5
 function printBoard(inputs)
+	local increment = 1 / INC
 	local now = socket.gettime()
 	if now < (lastPrinted + increment) then
 		socket.sleep((lastPrinted + increment) - now)
@@ -460,6 +467,16 @@ function playGame(stateIndex, genome)
 		currentFrame = currentFrame + 1
 		emu.frameadvance()
 		frame = frame + 1
+
+		local input = stdscr:getch()
+		statscr:mvaddstr(6, 2, tostring(input) .. "        ")
+		if input == 45 then
+			-- -
+			INC = INC / 2 
+		elseif input == 61 then
+			-- +
+			INC = INC * 2 
+		end	
 	end
 end
 
@@ -504,18 +521,46 @@ end
 --local networkStr = loadNetworkFile("189416.4_7032364562.genome")
 --local networkStr = loadNetworkFile("17869.3_6368966519.genome")
 local networkStr = loadNetworkFile("181404_13508766012.genomebitser")
+
+
+function getNewGenome()
+	-- Connect to server
+	local client, err = socket.connect(config.server, config.port)
+	if not err then
+		bytes, err = client:send(config.clientId .. "!" .. config.run .. "\n")
+		responseSize, err2 = client:receive("*line")
+		responseSize = tonumber(responseSize)
+		if responseSize and responseSize > 0 then
+			response, err = client:receive(responseSize)
+		end
+	end
+
+	-- Close the client
+	if client then
+		client:close()
+	end
+
+	return response
+end
+
 maxFitness = 0
+
+DEMO = true
 
 while true do
 	-- Get the first genome
 	local printResult = true
 
+	if DEMO then
+		networkStr = getNewGenome()
+	end
+
 	maxFitness = 0
 	for z = 1, 32 do
 		-- Avoid castles and water levels
 		if z % 4 ~= 0 and z ~= 6 and z ~= 26 then
-			--local genome = MessagePack.unpack(networkStr)
-			local genome = bitser.loads(networkStr, 1)
+			local genome = binser.deserializeN(networkStr, 1)
+			statscr:mvaddstr(5, 2, "Max fitness: " .. genome.fitness)
 			maxFitness = maxFitness + calculateDemoFitness(playGame(z, genome))
 		end
 	end
