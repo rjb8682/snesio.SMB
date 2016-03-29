@@ -561,6 +561,7 @@ while true do
 		if z % 4 ~= 0 and z ~= 6 and z ~= 26 then
 			local genome = binser.deserializeN(networkStr, 1)
 			statscr:mvaddstr(5, 2, "Max fitness: " .. genome.fitness)
+			statscr:refresh()
 			maxFitness = maxFitness + calculateDemoFitness(playGame(z, genome))
 		end
 	end

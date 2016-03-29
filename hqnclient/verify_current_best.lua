@@ -494,7 +494,6 @@ local printResult = true
 while true do
 	local networkStr = getNewGenome()
 
-
 	local maxFitness = 0
 	local fitnessGoal = 0
 	for z = 1, 32 do
@@ -505,8 +504,9 @@ while true do
 			maxFitness = maxFitness + calculateDemoFitness(playGame(z, genome))
 		end
 	end
-	dprint("Total max fitness: " .. maxFitness)
-	if fitnessGoal ~= maxFitness then
-		print("INCONSISTENT!")
+	dprint("Total max fitness:\t" .. maxFitness)
+	dprint("Expected:\t\t" .. fitnessGoal)
+	if math.abs(fitnessGoal - maxFitness) > 0.01 then
+		print("\t\t\tINCONSISTENT!")
 	end
 end
