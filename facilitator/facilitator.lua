@@ -4,6 +4,9 @@ local port = 56666
 local server = assert(socket.bind("*", port))
 local ip, port = server:getsockname()
 
+-- Default experiment to server if none else available
+local DEFAULT = "default.experiment"
+
 -- TODO: System to determine current active experiment
 -- maybe servers check in with facilitator? idk
 
@@ -59,9 +62,20 @@ function getExperimentAt(path)
 	return nil
 end
 
+function file_exists(name)
+    if name == nil then return false end
+    local f=io.open(name,"r")
+    if f~=nil then io.close(f) return true else return false end
+end
+
 function getCurrentExperiment()
     -- TODO: support multiple servers?
-    return getExperimentAt("current_experiments/current.config")
+    local currentConfig = "current_experiments/current.config"
+    if file_exists(currentConfig) then
+        return getExperimentAt(currentConfig)
+    else
+        return getExperimentAt(DEFAULT)
+    end
 end
 
 function getExperiment(experiment_name)
@@ -109,17 +123,27 @@ while true do
 			print("hello, server!")
 			if toks[2] then
 				print("Experiment complete: " .. toks[2])
+                -- io.popen("t dm @tacticalfruit '" .. toks[2] .. "'", "r")
+                io.popen("slack-post facilitator 'Experiment `" .. toks[2] .. "` complete'", "r")
                 markExperimentComplete(toks[2])
 			else
                 local newExperimentPath = getNewExperimentPath()
-				local experiment = getExperimentAt(newExperimentPath)
+                local experiment = nil
+                if file_exists(newExperimentPath) then
+    				experiment = getExperimentAt(newExperimentPath)
+                else
+                    experiment = getExperimentAt(DEFAULT)
+                end
                 if experiment then
-                    print("New experiment path: " .. newExperimentPath)
+                    if newExperimentPath then
+                        print("New experiment path: " .. newExperimentPath)
+                        markExperimentInProgress(newExperimentPath)
+                    end
+                    
                     local result = serpent.dump(experiment)
                     print("Sending config:")
                     print(result)
                     client:send(result)
-                    markExperimentInProgress(newExperimentPath)
                 else
                     print("No current experiment!")
                     client:send("nothing")
