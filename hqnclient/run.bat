@@ -1,5 +1,5 @@
 :loop
 
-hqnes.exe smb.nes zmqclient.lua
+hqnes.exe smb.nes client.lua
 
 goto loop
