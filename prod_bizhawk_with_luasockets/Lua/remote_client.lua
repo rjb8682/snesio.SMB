@@ -492,6 +492,8 @@ maxFitness = 0
 
 DEMO = true
 
+--io.popen("run_net.bat")
+
 while true do
 	-- Get the first genome
 	local printResult = true

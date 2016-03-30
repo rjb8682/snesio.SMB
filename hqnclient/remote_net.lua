@@ -1,8 +1,7 @@
 local serpent = require("serpent")
 local zmq = require("zmq")
-local bitser = require("bitser")
+local binser = require("binser")
 local socket = require("socket")
-bitser.reserveBuffer(1024 * 1024 * 3)
 
 -- Controls when to stop training
 local timeToDie = false 
@@ -91,21 +90,23 @@ print("ip: " .. ip .. " port: " .. port)
 local response = nil
 
 function playGame(networkStr, client)
-	local network = bitser.loads(networkStr)
+	local network = binser.deserializeN(networkStr, 1)
 	assert(network)
 	while true do
 		local cmd, err = client:receive()
 		if cmd == "refresh" then
 			-- TODO not really necessary (just do individual levels)
-			network = bitser.loads(bits.network)
+			network = binser.deserializeN(networkStr, 1)
 		elseif cmd == "die" then
 			print("All done!")
 			client:close()
 			return
 		elseif tonumber(cmd) then
 			local inputs, err = client:receive(tonumber(cmd))
-			local outputs = evaluateNetwork(network, bitser.loads(inputs))
-			client:send(serpent.dump(outputs) .. "\n")
+			local outputs = evaluateNetwork(network, binser.deserializeN(inputs, 1))
+			outputs = serpent.dump(outputs)
+			print(outputs)
+			client:send(outputs .. "\n")
 		else
 			print("Wat")
 		end
@@ -119,7 +120,6 @@ while true do
 	print("Received " .. bitsComing)
 	bitsComing = tonumber(bitsComing)
 	local line, err = client:receive(bitsComing)
-	print("Net: " .. line)
 	if line then
 		playGame(line, client)
 	else
