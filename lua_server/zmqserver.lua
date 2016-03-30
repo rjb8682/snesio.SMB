@@ -1407,7 +1407,7 @@ function countActiveClients()
 	for clientId, stats in pairs(clients) do
 		if isFreshClient(clientId, now) then
 			-- Assume that each client represents four emulators
-			count = count + 16 
+			count = count + 12
 		end
 	end
 	statscr:mvaddstr(9,1,count .. " active clients")
@@ -1601,11 +1601,8 @@ local function runServer()
 						lastSumFitness = fitnessResult
 						addAverage(fitnessAverages, lastSumFitness)
 
-						if playedGenome.fitness > pool.maxFitness then
-							-- local framesTrained = conf.FramesSpentTraining
-							-- if not framesTrained then
-							-- 	framesTrained = framesSinceLastBackup
-							-- end
+                        -- Fuck floats
+						if (playedGenome.fitness - pool.maxFitness) > 0.001 then
 							local framesTrained = framesSinceLastBackup
 							if conf.FramesSpentTraining then
 								framesTrained = framesSinceLastBackup + conf.FramesSpentTraining
@@ -1687,11 +1684,10 @@ local function runServer()
 			-- Save a backup of the generation, if it's been long enough (or we won!)
 			local timeSinceLastBackup = socket.gettime() - lastSaved
 			if timeSinceLastBackup >= SAVE_EVERY_N_MINUTES
-				--or hasAchievedNewMaxFitness
+				or hasAchievedNewMaxFitness
 	            or TIME_TO_STOP then
 				writeBackup("backup." .. pool.generation .. ".NEW_GENERATION",
 					timeSinceLastBackup, framesSinceLastBackup)
-				collectgarbage()
 				framesSinceLastBackup = 0
 				lastSaved = socket.gettime()
 				lastCheckpoint = os.date("%c", os.time())
