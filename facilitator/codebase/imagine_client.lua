@@ -494,18 +494,21 @@ function displayGenome(genome)
     dxCell.y = 110
     dxCell.value = network.neurons[Inputs-2].value
     cells[Inputs-2] = dxCell
+    text(65, 108, "vx",   0xCCCCCCCC, 10 * SCALE)
 	
     local dyCell = {}
     dyCell.x = 80
     dyCell.y = 120
     dyCell.value = network.neurons[Inputs-1].value
     cells[Inputs-1] = dyCell
+    text(65, 118, "vy",   0xCCCCCCCC, 10 * SCALE)
 
     local biasCell = {}
     biasCell.x = 80
     biasCell.y = 130
     biasCell.value = network.neurons[Inputs].value
     cells[Inputs] = biasCell
+    text(65, 128, "bias", 0xCCCCCCCC, 10 * SCALE)
 
     for n, neuron in pairs(network.neurons) do
         cell = {}
