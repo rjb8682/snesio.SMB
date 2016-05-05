@@ -6,7 +6,6 @@ local memoize = require("memoize")
 local socket = require("socket") -- for time only
 local zmq = require("zmq")
 bitser.reserveBuffer(1024 * 1024 * 3)
-local MessagePack = require("MessagePack")
 -- TODO local functions?
 
 -- How many frames of results we've obtained since backing up
@@ -1272,7 +1271,7 @@ local function printClientsDisplay()
 			active = "*"
 		end
 		local y, x = clientscr:getyx()
-		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %12s | %7.1f %5.1f%% | %10d | %5.1f",
+		clientscr:mvaddstr(y+1,1,string.format(" %1s | %1s %12s | %7d %5.1f%% | %10d | %5d",
 			active, stats.char, string.sub(client, 1, 12), stats.levelsPlayed / 22, percent, stats.framesPlayed, stats.staleLevels / 22))
 	end
 	clientscr:refresh()
@@ -1336,7 +1335,7 @@ local function calculateFitness(level, stateIndex)
 	local result = level.d
 	local timePenalty = level.f / 10
 	if level.w == 1 then
-		result = result + 5000
+		result = result + (5000)
 	end
 
 	local world, level = getWorldAndLevel(stateIndex)
@@ -1407,7 +1406,7 @@ function countActiveClients()
 	for clientId, stats in pairs(clients) do
 		if isFreshClient(clientId, now) then
 			-- Assume that each client represents four emulators
-			count = count + 12
+			count = count + 8
 		end
 	end
 	statscr:mvaddstr(9,1,count .. " active clients")
@@ -1686,6 +1685,7 @@ local function runServer()
 			if timeSinceLastBackup >= SAVE_EVERY_N_MINUTES
 				or hasAchievedNewMaxFitness
 	            or TIME_TO_STOP then
+                collectgarbage()
 				writeBackup("backup." .. pool.generation .. ".NEW_GENERATION",
 					timeSinceLastBackup, framesSinceLastBackup)
 				framesSinceLastBackup = 0
